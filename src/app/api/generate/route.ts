@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 
 // FCE Base System Prompt — keep this static so it gets cached by Anthropic
 const FCE_SYSTEM_PROMPT = `You are FCE — Floothink Content Engine. You are a senior brand strategist and copywriter with deep expertise in social media content for Indonesian and Southeast Asian markets.
@@ -41,7 +42,8 @@ export async function POST(req: NextRequest) {
       visualStyle,
       outputLength,
       additionalContext,
-      language = 'Indonesian'
+      language = 'Indonesian',
+      workspace_id
     } = body
 
     // Build the brand context string (this gets cached)
@@ -132,15 +134,31 @@ ${FCE_OUTPUT_SCHEMA}`
       return NextResponse.json({ error: 'Failed to parse AI response', raw: rawText }, { status: 500 })
     }
 
+    // Calculate Claude 3.5 Sonnet Usage in USD ($3/1M in, $15/1M out)
+    const inTokens = data.usage?.input_tokens || 0
+    const outTokens = data.usage?.output_tokens || 0
+    const inCost = (inTokens / 1000000) * 3.00
+    const outCost = (outTokens / 1000000) * 15.00
+    const totalCost = inCost + outCost
+
+    if (workspace_id && totalCost > 0) {
+      const { error: rpcError } = await supabase.rpc('increment_api_usage', {
+        p_workspace_id: workspace_id,
+        p_amount: totalCost
+      })
+      if (rpcError) console.error('Failed to log API usage:', rpcError)
+    }
+
     // Return result with usage metadata (useful for monitoring costs)
     return NextResponse.json({
       success: true,
       output: parsed,
       usage: {
-        input_tokens: data.usage?.input_tokens,
-        output_tokens: data.usage?.output_tokens,
-        cache_read_input_tokens: data.usage?.cache_read_input_tokens,
-        cache_creation_input_tokens: data.usage?.cache_creation_input_tokens,
+        input_tokens: inTokens,
+        output_tokens: outTokens,
+        cache_read_input_tokens: data.usage?.cache_read_input_tokens || 0,
+        cache_creation_input_tokens: data.usage?.cache_creation_input_tokens || 0,
+        cost_usd: totalCost
       }
     })
 

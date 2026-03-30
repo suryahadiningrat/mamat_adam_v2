@@ -1,10 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Zap, ChevronDown, Sparkles, Copy, RefreshCw,
   CheckCircle2, Hash, Image, MessageSquare, ArrowRight,
   ToggleLeft, ToggleRight, Info, Brain, Package
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 // ─── Mock brand/product data (replace with Supabase queries) ─────────────────
 const mockBrands = [
@@ -132,6 +133,18 @@ export default function GeneratePage() {
     framework: '', hookType: '', tone: '', visualStyle: '',
     outputLength: '', additionalContext: ''
   })
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadWs() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
+        if (roles?.[0]) setWorkspaceId(roles[0].workspace_id)
+      }
+    }
+    loadWs()
+  }, [])
 
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -161,6 +174,7 @@ export default function GeneratePage() {
           visualStyle: form.visualStyle,
           outputLength: form.outputLength,
           additionalContext: form.additionalContext,
+          workspace_id: workspaceId
         })
       })
       const data = await res.json()

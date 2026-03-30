@@ -1,7 +1,13 @@
 'use client'
 import { Search, Bell, Plus } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 export default function Topbar() {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    // Optional: add router.push('/login') but session state change will handle it via layout
+  }
+
   return (
     <header className="topbar">
       {/* Search */}
@@ -29,7 +35,7 @@ export default function Topbar() {
         </div>
 
         {/* Avatar */}
-        <div className="avatar">BS</div>
+        <div className="avatar" onClick={handleLogout} title="Sign Out">BS</div>
       </div>
     </header>
   )

@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
-import Topbar from '@/components/Topbar'
 
 export const metadata: Metadata = {
   title: 'FCE — Floothink Content Engine',
@@ -16,13 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="app-shell">
-          <Sidebar />
-          <Topbar />
-          <main className="main-content">
-            {children}
-          </main>
-        </div>
+        {children}
       </body>
     </html>
   )
