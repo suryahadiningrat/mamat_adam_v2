@@ -46,17 +46,31 @@ export async function POST(req: NextRequest) {
       workspace_id
     } = body
 
+    const fmtArr = (v: any) => Array.isArray(v) && v.length ? v.join(', ') : 'Not specified'
+    const fmtList = (v: any) => Array.isArray(v) && v.length ? v.map((x: string) => `• ${x}`).join('\n') : 'Not specified'
+
     // Build the brand context string (this gets cached)
     const brandContext = `
 BRAND BRAIN:
-- Brand: ${brand.name} (${brand.category})
+- Brand: ${brand.name}${brand.industry ? ` (${brand.industry})` : ''}
+- Website: ${brand.website || 'Not specified'}
+- Brand Summary: ${brand.brandSummary || 'Not specified'}
 - Personality: ${brand.personality || 'Not specified'}
 - Tone of Voice: ${brand.toneOfVoice || 'Not specified'}
 - Brand Promise: ${brand.brandPromise || 'Not specified'}
-- Audience: ${brand.audience || 'Not specified'}
+- Brand Values: ${fmtArr(brand.brandValues)}
+- Target Audience: ${brand.audience || 'Not specified'}
+- Unique Selling Points: ${brand.uniqueSellingPoints || 'Not specified'}
+- Content Language: ${brand.contentLanguage || 'Not specified'}
+- Active Platforms: ${fmtArr(brand.socialPlatforms)}
+- Content Pillars: ${fmtArr(brand.contentPillars)}
+- Marketing Strategy: ${brand.marketingStrategy || 'Not specified'}
+- Do's:
+${fmtList(brand.dos)}
+- Don'ts:
+${fmtList(brand.donts)}
 - Vocabulary Whitelist: ${brand.vocabularyWhitelist?.join(', ') || 'None specified'}
 - Vocabulary Blacklist: ${brand.vocabularyBlacklist?.join(', ') || 'None specified'}
-- Communication Rules: ${brand.messagingRules || 'None specified'}
 
 PRODUCT BRAIN:
 - Product: ${product.name} (${product.type || 'General'})
@@ -134,12 +148,18 @@ ${FCE_OUTPUT_SCHEMA}`
       return NextResponse.json({ error: 'Failed to parse AI response', raw: rawText }, { status: 500 })
     }
 
-    // Calculate Claude 3.5 Sonnet Usage in USD ($3/1M in, $15/1M out)
+    // Calculate Claude 3.5 Sonnet Usage in USD ($3/1M in, $15/1M out, $3.75 cache write, $0.30 cache read)
     const inTokens = data.usage?.input_tokens || 0
     const outTokens = data.usage?.output_tokens || 0
+    const cacheCreateTokens = data.usage?.cache_creation_input_tokens || 0
+    const cacheReadTokens = data.usage?.cache_read_input_tokens || 0
+
     const inCost = (inTokens / 1000000) * 3.00
     const outCost = (outTokens / 1000000) * 15.00
-    const totalCost = inCost + outCost
+    const cacheCreateCost = (cacheCreateTokens / 1000000) * 3.75
+    const cacheReadCost = (cacheReadTokens / 1000000) * 0.30
+
+    const totalCost = inCost + outCost + cacheCreateCost + cacheReadCost
 
     if (workspace_id && totalCost > 0) {
       const { error: rpcError } = await supabase.rpc('increment_api_usage', {

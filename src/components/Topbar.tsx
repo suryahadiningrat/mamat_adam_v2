@@ -18,10 +18,10 @@ export default function Topbar() {
 
       <div className="topbar-actions">
         {/* New content button */}
-        <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 12.5 }}>
+        <a href="/generate" className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 12.5 }}>
           <Plus size={13} />
           New Content
-        </button>
+        </a>
 
         {/* Notifications */}
         <div className="icon-btn" style={{ position: 'relative' }}>

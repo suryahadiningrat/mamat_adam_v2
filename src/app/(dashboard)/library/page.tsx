@@ -1,28 +1,15 @@
 'use client'
-import { useState } from 'react'
-import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ExternalLink, Filter, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ChevronDown, Heart, MessageCircle, Send, Bookmark, Repeat2, BarChart2, Image, ThumbsUp, Share2, Play } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 type Status = 'approved' | 'draft' | 'rejected'
-type Platform = 'Instagram' | 'TikTok' | 'YouTube' | 'Twitter/X' | 'LinkedIn'
+type Platform = 'Instagram' | 'TikTok' | 'YouTube' | 'Twitter/X' | 'LinkedIn' | 'Facebook'
 
-const platformColors: Record<Platform, string> = {
-  Instagram: '#e1306c', TikTok: '#888', YouTube: '#ff0000',
-  'Twitter/X': '#1d9bf0', LinkedIn: '#0a66c2',
+const platformColors: Record<string, string> = {
+  Instagram: '#e1306c', TikTok: '#ee1d52', YouTube: '#ff0000',
+  'Twitter/X': '#1d9bf0', LinkedIn: '#0a66c2', Facebook: '#1877f2'
 }
-
-const mockLibrary: {
-  id: string; title: string; hook: string; brand: string; product: string;
-  platform: Platform; status: Status; framework: string; createdAt: string; author: string
-}[] = [
-  { id: '1', title: 'Ramadan Glow Hook', hook: 'Kulit kamu udah siap menyambut Ramadan?', brand: 'Lumière', product: 'Hydra Serum', platform: 'Instagram', status: 'approved', framework: 'PAS', createdAt: '2h ago', author: 'BS' },
-  { id: '2', title: 'Gen Z Product Launch Thread', hook: 'hot take: skincare routine kamu mungkin terlalu ribet', brand: 'Lumière', product: 'Night Repair', platform: 'Twitter/X', status: 'draft', framework: 'AIDA', createdAt: '4h ago', author: 'RA' },
-  { id: '3', title: 'TikTok Pain Point Script', hook: 'POV: udah beli 5 serum tapi kulit masih kering', brand: 'Lumière', product: 'Hydra Serum', platform: 'TikTok', status: 'approved', framework: 'BAB', createdAt: '6h ago', author: 'BS' },
-  { id: '4', title: 'Brand Awareness YouTube', hook: 'We don\'t sell skincare. We sell confidence.', brand: 'Lumière', product: 'Night Repair', platform: 'YouTube', status: 'rejected', framework: 'AIDA', createdAt: 'Yesterday', author: 'RA' },
-  { id: '5', title: 'Runner Pro Performance Ad', hook: 'Every second matters. Every gram counts.', brand: 'Velox', product: 'Runner Pro', platform: 'Instagram', status: 'approved', framework: 'PAS', createdAt: 'Yesterday', author: 'BS' },
-  { id: '6', title: 'Office Chair Work-from-home', hook: 'Your back deserves better than that dining chair.', brand: 'Korridor', product: 'Office Chair X', platform: 'LinkedIn', status: 'approved', framework: 'PAS', createdAt: '2 days ago', author: 'BS' },
-  { id: '7', title: 'Flash Sale Urgency Caption', hook: '72 jam lagi. Harga balik normal.', brand: 'Lumière', product: 'Hydra Serum', platform: 'Instagram', status: 'approved', framework: 'BAB', createdAt: '2 days ago', author: 'RA' },
-  { id: '8', title: 'Wellness Morning Routine', hook: 'Pagi yang tenang dimulai dari satu keputusan kecil.', brand: 'Zenova', product: 'Calm Blend', platform: 'Instagram', status: 'draft', framework: 'PAS', createdAt: '1 week ago', author: 'BS' },
-]
 
 const statusConfig: Record<Status, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
   approved: { label: 'Approved', cls: 'status-approved', Icon: CheckCircle2 },
@@ -30,24 +17,293 @@ const statusConfig: Record<Status, { label: string; cls: string; Icon: typeof Ch
   rejected: { label: 'Rejected', cls: 'status-rejected', Icon: XCircle },
 }
 
+type OutputRecord = {
+  id: string
+  hook: string
+  main_copy: string
+  cta_options: string[]
+  hashtag_pack: string[]
+  status: Status
+  created_at: string
+  request: {
+    platform: Platform
+    brand: { name: string }
+    product: { name: string }
+  }
+}
+
 export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
+  const [items, setItems] = useState<OutputRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [workspaceId, setWorkspaceId] = useState('')
+  const [mockupItem, setMockupItem] = useState<OutputRecord | null>(null)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
-  const filtered = mockLibrary.filter(item => {
-    const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.hook.toLowerCase().includes(search.toLowerCase()) ||
-      item.brand.toLowerCase().includes(search.toLowerCase())
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
+    if (!roles?.[0]) { setLoading(false); return }
+
+    const wsId = roles[0].workspace_id
+    setWorkspaceId(wsId)
+
+    const { data, error } = await supabase
+      .from('generation_outputs')
+      .select(`
+        id, hook, main_copy, cta_options, hashtag_pack, status, created_at,
+        request:generation_requests (
+          platform,
+          brand:brands(name),
+          product:products(name)
+        )
+      `)
+      .eq('workspace_id', wsId)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      const parsed = data.map((d: any) => ({
+        ...d,
+        request: Array.isArray(d.request) ? d.request[0] : d.request
+      }))
+      setItems(parsed)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  const filtered = items.filter(item => {
+    const brandName = item.request?.brand?.name || ''
+    const matchSearch = item.hook?.toLowerCase().includes(search.toLowerCase()) ||
+                        item.main_copy?.toLowerCase().includes(search.toLowerCase()) ||
+                        brandName.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || item.status === statusFilter
-    const matchPlatform = platformFilter === 'all' || item.platform === platformFilter
+    const matchPlatform = platformFilter === 'all' || item.request?.platform === platformFilter
     return matchSearch && matchStatus && matchPlatform
   })
 
-  const counts = {
-    approved: mockLibrary.filter(i => i.status === 'approved').length,
-    draft: mockLibrary.filter(i => i.status === 'draft').length,
-    rejected: mockLibrary.filter(i => i.status === 'rejected').length,
+  const timeAgo = (dateStr: string) => {
+    const days = Math.round((Date.now() - new Date(dateStr).getTime()) / 86400000)
+    if (days === 0) return 'Today'
+    return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-days, 'day')
+  }
+
+  const updateStatus = async (id: string, newStatus: Status) => {
+    setUpdatingStatus(true)
+    await supabase.from('generation_outputs').update({ status: newStatus }).eq('id', id)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i))
+    setMockupItem(prev => prev?.id === id ? { ...prev, status: newStatus } : prev)
+    setUpdatingStatus(false)
+  }
+
+  // ─── Platform Mockups ─────────────────────────────────────────────────────
+
+  function InstagramMockup({ item }: { item: OutputRecord }) {
+    const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
+    const initial = item.request?.brand?.name?.charAt(0) || 'F'
+    return (
+      <div style={{ width: '100%', maxWidth: 360, background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+        <div style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #efefef' }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e1306c', fontSize: 12, fontWeight: 700 }}>{initial}</div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>{handle}</div>
+            <div style={{ fontSize: 11, color: '#8e8e8e' }}>Sponsored</div>
+          </div>
+        </div>
+        <div style={{ width: '100%', aspectRatio: '1/1', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Image size={32} color="#c0c0c0" />
+        </div>
+        <div style={{ padding: '10px 14px 4px', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 14 }}>
+            <Heart size={22} color="#262626" /><MessageCircle size={22} color="#262626" /><Send size={22} color="#262626" />
+          </div>
+          <Bookmark size={22} color="#262626" />
+        </div>
+        <div style={{ padding: '0 14px 14px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 4 }}>1,432 likes</div>
+          <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.45 }}>
+            <span style={{ fontWeight: 600, marginRight: 6 }}>{handle}</span>
+            {item.hook}<br /><br />
+            {item.main_copy}<br /><br />
+            <span style={{ fontWeight: 600 }}>{item.cta_options?.[0]}</span><br /><br />
+            <span style={{ color: '#00376b' }}>{item.hashtag_pack?.join(' ')}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function TwitterMockup({ item }: { item: OutputRecord }) {
+    const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
+    const initial = item.request?.brand?.name?.charAt(0) || 'B'
+    return (
+      <div style={{ width: '100%', maxWidth: 380, background: '#000', borderRadius: 12, border: '1px solid #2f3336', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'white', fontSize: 16 }}>{initial}</div>
+          <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#e7e9ea' }}>{item.request?.brand?.name || 'Brand'}</span>
+              <CheckCircle2 size={14} color="#1d9bf0" fill="#1d9bf0" stroke="black" />
+              <span style={{ color: '#71767b', fontSize: 13 }}>@{handle}</span>
+            </div>
+            <div style={{ fontSize: 14, color: '#e7e9ea', lineHeight: 1.5, marginTop: 6, whiteSpace: 'pre-wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{item.hook}</span>
+              {'\n\n'}{item.main_copy}{'\n\n'}
+              {item.cta_options?.[0]}{'\n\n'}
+              <span style={{ color: '#1d9bf0' }}>{item.hashtag_pack?.join(' ')}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#71767b', marginTop: 14, paddingRight: 20 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><MessageCircle size={15} /> 42</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Repeat2 size={15} /> 14</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Heart size={15} /> 402</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><BarChart2 size={15} /> 12k</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function TikTokMockup({ item }: { item: OutputRecord }) {
+    const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
+    return (
+      <div style={{ width: '100%', maxWidth: 300, background: '#000', borderRadius: 12, overflow: 'hidden', position: 'relative', minHeight: 420 }}>
+        {/* Video area */}
+        <div style={{ width: '100%', aspectRatio: '9/16', background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', padding: 16 }}>
+          <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)' }}>
+            <Play size={48} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
+          </div>
+          {/* Right actions */}
+          <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
+            {[{ Icon: Heart, label: '12.4K' }, { Icon: MessageCircle, label: '842' }, { Icon: Bookmark, label: '3.2K' }, { Icon: Share2, label: 'Share' }].map(({ Icon, label }) => (
+              <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <Icon size={26} color="white" />
+                <span style={{ fontSize: 10, color: 'white', fontWeight: 600 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+          {/* Bottom overlay */}
+          <div style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '20px 0 0' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 6 }}>@{handle}</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {item.hook} {item.main_copy}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: '#ee1d52' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function YouTubeMockup({ item }: { item: OutputRecord }) {
+    const handle = item.request?.brand?.name || 'Brand'
+    const initial = item.request?.brand?.name?.charAt(0) || 'B'
+    return (
+      <div style={{ width: '100%', maxWidth: 400, background: '#0f0f0f', borderRadius: 8, overflow: 'hidden' }}>
+        {/* Thumbnail */}
+        <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Play size={20} color="white" fill="white" />
+          </div>
+          <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.8)', color: 'white', fontSize: 11, fontWeight: 600, padding: '2px 5px', borderRadius: 4 }}>1:32</div>
+        </div>
+        {/* Info */}
+        <div style={{ padding: '10px 12px', display: 'flex', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ff0000', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>{initial}</div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f1f1', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.hook}</div>
+            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{handle} · 12K views · 3 days ago</div>
+          </div>
+        </div>
+        {/* Description */}
+        <div style={{ padding: '0 12px 12px', background: '#161616', borderRadius: 8, margin: '0 12px 12px', fontSize: 12.5, color: '#aaa', lineHeight: 1.5 }}>
+          <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {item.main_copy}
+          </div>
+          <div style={{ marginTop: 6, color: '#3ea6ff', fontSize: 12 }}>{item.cta_options?.[0]}</div>
+          <div style={{ marginTop: 4, color: '#3ea6ff', fontSize: 11 }}>{item.hashtag_pack?.slice(0, 3).join(' ')}</div>
+        </div>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 0, borderTop: '1px solid #272727', padding: '0 12px' }}>
+          {[{ Icon: ThumbsUp, label: '4.2K' }, { Icon: Share2, label: 'Share' }, { Icon: Bookmark, label: 'Save' }].map(({ Icon, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 12px', fontSize: 12, color: '#aaa', cursor: 'pointer' }}>
+              <Icon size={16} /> {label}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function LinkedInMockup({ item }: { item: OutputRecord }) {
+    const brandName = item.request?.brand?.name || 'Brand'
+    const initial = brandName.charAt(0)
+    return (
+      <div style={{ width: '100%', maxWidth: 400, background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: 10, borderBottom: '1px solid #e0e0e0' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 4, background: '#0a66c2', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 20 }}>{initial}</div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#000' }}>{brandName}</div>
+            <div style={{ fontSize: 12, color: '#666' }}>Company Page · Promoted</div>
+            <div style={{ fontSize: 11, color: '#999' }}>🌐 2,847 followers</div>
+          </div>
+        </div>
+        <div style={{ padding: '14px 16px', background: 'white' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#000', marginBottom: 8 }}>{item.hook}</div>
+          <div style={{ fontSize: 14, color: '#333', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {item.main_copy}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, color: '#0a66c2' }}>{item.cta_options?.[0]}</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: '#0a66c2' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
+        </div>
+        {/* Engagement bar */}
+        <div style={{ padding: '8px 16px', borderTop: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
+          <span>👍 ❤️ 💡  <span style={{ color: '#444' }}>247</span></span>
+          <span>32 comments · 18 reposts</span>
+        </div>
+        <div style={{ display: 'flex', borderTop: '1px solid #e0e0e0' }}>
+          {['Like', 'Comment', 'Repost', 'Send'].map(a => (
+            <div key={a} style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              <ThumbsUp size={14} /> {a}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function GenericMockup({ item }: { item: OutputRecord }) {
+    const platform = item.request?.platform
+    return (
+      <div style={{ width: '100%', maxWidth: 400, background: 'var(--surface-1)', borderRadius: 12, border: '1px solid var(--border)', padding: 20 }}>
+        <div style={{ display: 'inline-block', padding: '4px 10px', background: `${platformColors[platform] || '#888'}18`, color: platformColors[platform] || '#888', borderRadius: 20, fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+          {platform}
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>{item.hook}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.main_copy}</div>
+        <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 12 }}>{item.cta_options?.[0]}</div>
+        <div style={{ fontSize: 13, color: 'var(--green)' }}>{item.hashtag_pack?.join(' ')}</div>
+      </div>
+    )
+  }
+
+  function renderMockup(item: OutputRecord) {
+    const p = item.request?.platform
+    if (p === 'Instagram') return <InstagramMockup item={item} />
+    if (p === 'Twitter/X') return <TwitterMockup item={item} />
+    if (p === 'TikTok') return <TikTokMockup item={item} />
+    if (p === 'YouTube') return <YouTubeMockup item={item} />
+    if (p === 'LinkedIn') return <LinkedInMockup item={item} />
+    return <GenericMockup item={item} />
   }
 
   return (
@@ -55,24 +311,7 @@ export default function LibraryPage() {
       <div className="page-header page-header-row fade-up fade-up-1">
         <div>
           <h1 className="page-title">Content Library</h1>
-          <p className="page-subtitle">All generated outputs — search, filter, and reuse approved work.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {(['approved', 'draft', 'rejected'] as Status[]).map(s => {
-              const { label, cls, Icon } = statusConfig[s]
-              return (
-                <div key={s} style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                  borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)'
-                }}>
-                  <Icon size={12} className={cls} style={{ color: s === 'approved' ? 'var(--green)' : s === 'draft' ? 'var(--amber)' : 'var(--red)' }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{counts[s]}</span>
-                </div>
-              )
-            })}
-          </div>
+          <p className="page-subtitle">Your database of generated social media content.</p>
         </div>
       </div>
 
@@ -81,44 +320,25 @@ export default function LibraryPage() {
         <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
           <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search content, hooks, brands…"
-            style={{
-              width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '8px 12px 8px 34px', fontSize: 13.5,
-              color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none'
-            }} />
+            style={{ width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px 8px 34px', fontSize: 13.5, color: 'var(--text-primary)', outline: 'none' }} />
         </div>
-
-        {/* Status filter */}
         <div style={{ position: 'relative' }}>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{
-            appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)',
-            fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none'
-          }}>
-            <option value="all">All Status</option>
+          <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}>
+            <option value="all">All Platforms</option>
+            {Object.keys(platformColors).map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+        </div>
+        <div style={{ position: 'relative' }}>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}>
+            <option value="all">All Statuses</option>
             <option value="approved">Approved</option>
             <option value="draft">Draft</option>
             <option value="rejected">Rejected</option>
           </select>
           <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
         </div>
-
-        {/* Platform filter */}
-        <div style={{ position: 'relative' }}>
-          <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{
-            appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)',
-            fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none'
-          }}>
-            <option value="all">All Platforms</option>
-            {Object.keys(platformColors).map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
-        </div>
-
-        <span style={{ fontSize: 12.5, color: 'var(--text-tertiary)', alignSelf: 'center', marginLeft: 4 }}>
-          {filtered.length} of {mockLibrary.length} items
-        </span>
+        <span style={{ fontSize: 12.5, color: 'var(--text-tertiary)', alignSelf: 'center', marginLeft: 4 }}>{filtered.length} items</span>
       </div>
 
       {/* Table */}
@@ -126,78 +346,46 @@ export default function LibraryPage() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Content', 'Brand / Product', 'Platform', 'Framework', 'Status', 'Author', 'Created', ''].map(h => (
-                  <th key={h} style={{
-                    padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600,
-                    color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px',
-                    whiteSpace: 'nowrap'
-                  }}>{h}</th>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-1)' }}>
+                {['Content Hook', 'Brand', 'Platform', 'Status', 'Generated', ''].map(h => (
+                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(item => {
-                const { cls, Icon } = statusConfig[item.status]
+              {loading ? (
+                <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                  No content saved yet. <a href="/generate" style={{ color: 'var(--accent)' }}>Generate your first →</a>
+                </td></tr>
+              ) : filtered.map(item => {
+                const { cls, Icon } = statusConfig[item.status] || statusConfig['draft']
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.1s', cursor: 'pointer' }}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-3)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-                    <td style={{ padding: '12px 16px', maxWidth: 280 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: 'italic' }}>"{item.hook}"</div>
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                    onClick={() => setMockupItem(item)}>
+                    <td style={{ padding: '12px 16px', maxWidth: 350 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.hook}</div>
                     </td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{item.brand}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{item.product}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{item.request?.brand?.name || 'Unknown'}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{item.request?.product?.name}</div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{
-                        fontSize: 12, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                        color: platformColors[item.platform],
-                        background: `${platformColors[item.platform]}18`,
-                        border: `1px solid ${platformColors[item.platform]}40`,
-                        whiteSpace: 'nowrap'
-                      }}>{item.platform}</span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{
-                        fontSize: 11.5, fontFamily: 'var(--font-mono)', fontWeight: 500, padding: '2px 8px',
-                        borderRadius: 6, background: 'var(--surface-4)', color: 'var(--text-secondary)',
-                        border: '1px solid var(--border)'
-                      }}>{item.framework}</span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span className={`status-pill ${cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                        <Icon size={10} />
-                        {statusConfig[item.status].label}
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: platformColors[item.request?.platform] || '#888', background: `${platformColors[item.request?.platform] || '#888'}18`, border: `1px solid ${platformColors[item.request?.platform] || '#888'}40`, whiteSpace: 'nowrap' }}>
+                        {item.request?.platform || 'Unknown'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{
-                        width: 26, height: 26, borderRadius: 6, background: 'var(--accent)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10.5, fontWeight: 700, color: 'white', fontFamily: 'var(--font-display)'
-                      }}>{item.author}</div>
+                      <span className={`status-pill ${cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                        <Icon size={10} />{statusConfig[item.status]?.label}
+                      </span>
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{item.createdAt}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', gap: 5 }}>
-                        <button title="Copy" style={{
-                          width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)',
-                          background: 'var(--surface-3)', cursor: 'pointer', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', transition: 'all 0.15s'
-                        }}>
-                          <Copy size={12} />
-                        </button>
-                        <button title="Open" style={{
-                          width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)',
-                          background: 'var(--surface-3)', cursor: 'pointer', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', transition: 'all 0.15s'
-                        }}>
-                          <ExternalLink size={12} />
-                        </button>
-                      </div>
+                    <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{timeAgo(item.created_at)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={e => { e.stopPropagation(); setMockupItem(item) }}>View</button>
                     </td>
                   </tr>
                 )
@@ -206,6 +394,64 @@ export default function LibraryPage() {
           </table>
         </div>
       </div>
+
+      {/* Mockup Modal */}
+      {mockupItem && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20
+        }} onClick={() => setMockupItem(null)}>
+
+          <div style={{
+            background: 'var(--surface-1)', width: '100%', maxWidth: 480,
+            borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid var(--border)'
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {mockupItem.request?.platform} Preview
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => navigator.clipboard.writeText([mockupItem.hook, mockupItem.main_copy, mockupItem.cta_options?.[0], mockupItem.hashtag_pack?.join(' ')].filter(Boolean).join('\n\n'))}
+                  className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }}>
+                  <Copy size={11} /> Copy All
+                </button>
+                <button style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }} onClick={() => setMockupItem(null)}>
+                  <XCircle size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Mockup Canvas */}
+            <div style={{ padding: 20, background: 'var(--surface-3)', display: 'flex', justifyContent: 'center', minHeight: 300, maxHeight: '60vh', overflowY: 'auto' }}>
+              {renderMockup(mockupItem)}
+            </div>
+
+            {/* Status actions */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginRight: 4 }}>Status:</span>
+              {(['approved', 'draft', 'rejected'] as Status[]).map(s => {
+                const { Icon, label } = statusConfig[s]
+                const isActive = mockupItem.status === s
+                return (
+                  <button key={s} onClick={() => updateStatus(mockupItem.id, s)} disabled={updatingStatus || isActive}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: isActive ? 'default' : 'pointer', transition: 'all 0.15s', fontFamily: 'var(--font-body)',
+                      background: isActive ? (s === 'approved' ? 'rgba(34,211,160,0.15)' : s === 'rejected' ? 'rgba(248,113,113,0.15)' : 'rgba(245,158,11,0.15)') : 'var(--surface-3)',
+                      color: isActive ? (s === 'approved' ? 'var(--green)' : s === 'rejected' ? 'var(--red)' : 'var(--amber)') : 'var(--text-tertiary)',
+                      border: isActive ? `1px solid ${s === 'approved' ? 'rgba(34,211,160,0.4)' : s === 'rejected' ? 'rgba(248,113,113,0.4)' : 'rgba(245,158,11,0.4)'}` : '1px solid var(--border)',
+                    }}>
+                    <Icon size={11} />{label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

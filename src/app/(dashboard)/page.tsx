@@ -1,63 +1,23 @@
 'use client'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
-  Brain, Package, Zap, Megaphone, TrendingUp,
-  Instagram, Youtube, Twitter, Plus, ArrowRight,
+  Brain, Package, Zap, Megaphone,
+  Plus, ArrowRight,
   CheckCircle2, Clock, XCircle, ChevronRight, Sparkles,
   BarChart3, Layers, BookOpen, Library, RefreshCw
 } from 'lucide-react'
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
-const kpiData = [
-  {
-    icon: Brain, label: 'Active Brands', value: '4',
-    delta: '+1 this month', up: true,
-    color: '#7c6dfa', bg: 'rgba(124,109,250,0.1)'
-  },
-  {
-    icon: Package, label: 'Products', value: '12',
-    delta: '+3 this month', up: true,
-    color: '#22d3a0', bg: 'rgba(34,211,160,0.1)'
-  },
-  {
-    icon: Zap, label: 'Generations', value: '187',
-    delta: '+42 this week', up: true,
-    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)'
-  },
-  {
-    icon: Megaphone, label: 'Campaigns', value: '6',
-    delta: '2 active now', up: false,
-    color: '#38bdf8', bg: 'rgba(56,189,248,0.1)'
-  },
-]
-
 type StatusType = 'approved' | 'draft' | 'rejected'
-type PlatformType = 'Instagram' | 'TikTok' | 'YouTube' | 'Twitter' | 'LinkedIn'
 
-const platformColors: Record<PlatformType, string> = {
-  Instagram: '#e1306c',
-  TikTok: '#ffffff',
-  YouTube: '#ff0000',
-  Twitter: '#1d9bf0',
-  LinkedIn: '#0a66c2',
+const platformColors: Record<string, string> = {
+  instagram: '#e1306c',
+  tiktok: '#ffffff',
+  youtube: '#ff0000',
+  twitter: '#1d9bf0',
+  linkedin: '#0a66c2',
+  facebook: '#1877f2',
 }
-
-const recentGenerations: {
-  id: string
-  title: string
-  brand: string
-  product: string
-  platform: PlatformType
-  status: StatusType
-  framework: string
-  time: string
-}[] = [
-  { id: '1', title: 'Ramadan Glow Hook — curiosity angle', brand: 'Lumière', product: 'Hydra Serum', platform: 'Instagram', status: 'approved', framework: 'PAS', time: '2h ago' },
-  { id: '2', title: 'Product launch thread for Gen Z', brand: 'Velox', product: 'Runner Pro', platform: 'Twitter', status: 'draft', framework: 'AIDA', time: '4h ago' },
-  { id: '3', title: 'TikTok pain-point hook video script', brand: 'Lumière', product: 'Night Repair', platform: 'TikTok', status: 'approved', framework: 'BAB', time: '6h ago' },
-  { id: '4', title: 'YouTube description — brand awareness', brand: 'Korridor', product: 'Office Chair X', platform: 'YouTube', status: 'rejected', framework: 'AIDA', time: 'Yesterday' },
-  { id: '5', title: 'Employee value prop copy for hiring', brand: 'Velox', product: 'Company', platform: 'LinkedIn', status: 'draft', framework: 'PAS', time: 'Yesterday' },
-  { id: '6', title: 'Flash sale urgency caption', brand: 'Lumière', product: 'Hydra Serum', platform: 'Instagram', status: 'approved', framework: 'BAB', time: '2 days ago' },
-]
 
 const recommendations = {
   frameworks: ['PAS', 'BAB', 'AIDA'],
@@ -68,32 +28,17 @@ const recommendations = {
 const quickActions = [
   { icon: Zap, label: 'Generate Content', sub: 'Caption, hook, CTA', color: '#7c6dfa', bg: 'rgba(124,109,250,0.15)', href: '/generate' },
   { icon: Megaphone, label: 'New Campaign', sub: 'Full strategy brief', color: '#38bdf8', bg: 'rgba(56,189,248,0.15)', href: '/campaigns' },
-  { icon: Brain, label: 'Add Brand', sub: 'Set up brand brain', color: '#22d3a0', bg: 'rgba(34,211,160,0.15)', href: '/brands/new' },
-  { icon: Package, label: 'Add Product', sub: 'Link to a brand', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', href: '/products/new' },
+  { icon: Brain, label: 'Add Brand', sub: 'Set up brand brain', color: '#22d3a0', bg: 'rgba(34,211,160,0.15)', href: '/brands' },
+  { icon: Package, label: 'Add Product', sub: 'Link to a brand', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', href: '/products' },
 ]
 
-const brands = [
-  { name: 'Lumière', category: 'Beauty', color: '#e1306c', products: 5, generations: 98, status: 'active' },
-  { name: 'Velox', category: 'Sports', color: '#38bdf8', products: 4, generations: 54, status: 'active' },
-  { name: 'Korridor', category: 'Furniture', color: '#22d3a0', products: 2, generations: 22, status: 'active' },
-  { name: 'Zenova', category: 'Wellness', color: '#f59e0b', products: 1, generations: 13, status: 'draft' },
-]
-
-const usageStats = [
-  { label: 'Brand Brain completeness', val: '72%', pct: 72, variant: 'default' },
-  { label: 'Approval rate (this month)', val: '84%', pct: 84, variant: 'green' },
-  { label: 'Content Library fill rate', val: '58%', pct: 58, variant: 'default' },
-  { label: 'Team activity (last 7d)', val: '91%', pct: 91, variant: 'green' },
-]
-
-// ─── Status pill ─────────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: StatusType }) {
   const map: Record<StatusType, { cls: string; label: string; Icon: typeof CheckCircle2 }> = {
     approved: { cls: 'status-approved', label: 'Approved', Icon: CheckCircle2 },
     draft: { cls: 'status-draft', label: 'Draft', Icon: Clock },
     rejected: { cls: 'status-rejected', label: 'Rejected', Icon: XCircle },
   }
-  const { cls, label, Icon } = map[status]
+  const { cls, label, Icon } = map[status] ?? map.draft
   return (
     <span className={`status-pill ${cls}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <Icon size={10} />
@@ -102,54 +47,167 @@ function StatusPill({ status }: { status: StatusType }) {
   )
 }
 
-// ─── Platform icon ────────────────────────────────────────────────────────────
-function PlatformDot({ platform }: { platform: PlatformType }) {
+function PlatformDot({ platform }: { platform: string }) {
   return (
     <div
       className="gen-platform-dot"
-      style={{ background: platformColors[platform] }}
+      style={{ background: platformColors[platform?.toLowerCase()] ?? 'var(--text-tertiary)' }}
       title={platform}
     />
   )
 }
 
-// ─── Main dashboard ───────────────────────────────────────────────────────────
+function timeAgo(dateStr: string): string {
+  const now = Date.now()
+  const then = new Date(dateStr).getTime()
+  const diff = Math.floor((now - then) / 1000)
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 172800) return 'Yesterday'
+  return `${Math.floor(diff / 86400)} days ago`
+}
+
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+const brandColors = ['#7c6dfa', '#e1306c', '#22d3a0', '#f59e0b', '#38bdf8', '#ec4899', '#a78bfa', '#34d399']
+
 export default function DashboardPage() {
+  const [userName, setUserName] = useState('there')
+  const [kpis, setKpis] = useState({ brands: 0, products: 0, generations: 0, campaigns: 0 })
+  const [recentGenerations, setRecentGenerations] = useState<any[]>([])
+  const [libraryCounts, setLibraryCounts] = useState({ approved: 0, draft: 0, rejected: 0 })
+  const [brandsData, setBrandsData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboard()
+  }, [])
+
+  async function loadDashboard() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Get workspace
+    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
+    const wsId = roles?.[0]?.workspace_id
+    if (!wsId) { setLoading(false); return }
+
+    // All data in parallel
+    const [
+      profileRes,
+      brandsRes,
+      productsCountRes,
+      generationsCountRes,
+      campaignsCountRes,
+      recentGenRes,
+      libraryRes,
+      brandStatsRes
+    ] = await Promise.all([
+      supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
+      supabase.from('brands').select('id, name, category, status').eq('workspace_id', wsId).order('created_at', { ascending: false }),
+      supabase.from('products').select('id, brand_id').eq('workspace_id', wsId),
+      supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+      supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+      supabase.from('generation_outputs').select(`
+        id, hook, status, created_at, workspace_id,
+        generation_requests ( platform, framework_id, brand_id, brands ( name ), products ( name ) )
+      `).eq('workspace_id', wsId).order('created_at', { ascending: false }).limit(6),
+      supabase.from('generation_outputs').select('status').eq('workspace_id', wsId),
+      supabase.from('generation_requests').select('brand_id').eq('workspace_id', wsId),
+    ])
+
+    // User name
+    if (profileRes.data?.full_name) {
+      setUserName(profileRes.data.full_name.split(' ')[0])
+    }
+
+    // KPIs
+    const allBrands = brandsRes.data || []
+    const allProducts = productsCountRes.data || []
+    setKpis({
+      brands: allBrands.length,
+      products: allProducts.length,
+      generations: generationsCountRes.count ?? 0,
+      campaigns: campaignsCountRes.count ?? 0,
+    })
+
+    // Recent generations
+    if (recentGenRes.data) {
+      setRecentGenerations(recentGenRes.data)
+    }
+
+    // Library counts
+    const outputs = libraryRes.data || []
+    setLibraryCounts({
+      approved: outputs.filter((o: any) => o.status === 'approved').length,
+      draft: outputs.filter((o: any) => o.status === 'draft').length,
+      rejected: outputs.filter((o: any) => o.status === 'rejected').length,
+    })
+
+    // Brands with product + output counts
+    const productsByBrand: Record<string, number> = {}
+    allProducts.forEach((p: any) => {
+      productsByBrand[p.brand_id] = (productsByBrand[p.brand_id] || 0) + 1
+    })
+    const outputsByBrand: Record<string, number> = {}
+    ;(brandStatsRes.data || []).forEach((r: any) => {
+      if (r.brand_id) outputsByBrand[r.brand_id] = (outputsByBrand[r.brand_id] || 0) + 1
+    })
+    setBrandsData(allBrands.map((b: any, i: number) => ({
+      ...b,
+      color: brandColors[i % brandColors.length],
+      products: productsByBrand[b.id] || 0,
+      generations: outputsByBrand[b.id] || 0,
+    })))
+
+    setLoading(false)
+  }
+
+  const totalOutputs = libraryCounts.approved + libraryCounts.draft + libraryCounts.rejected
+
+  const kpiCards = [
+    { icon: Brain, label: 'Active Brands', value: String(kpis.brands), color: '#7c6dfa', bg: 'rgba(124,109,250,0.1)' },
+    { icon: Package, label: 'Products', value: String(kpis.products), color: '#22d3a0', bg: 'rgba(34,211,160,0.1)' },
+    { icon: Zap, label: 'Generations', value: String(kpis.generations), color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+    { icon: Megaphone, label: 'Campaigns', value: String(kpis.campaigns), color: '#38bdf8', bg: 'rgba(56,189,248,0.1)' },
+  ]
+
   return (
     <div>
       {/* Page header */}
       <div className="page-header page-header-row fade-up fade-up-1">
         <div>
-          <h1 className="page-title">Good morning, Budi 👋</h1>
+          <h1 className="page-title">{greeting()}, {userName} 👋</h1>
           <p className="page-subtitle">Here's what's happening across your workspace today.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary">
+          <button className="btn btn-secondary" onClick={loadDashboard}>
             <RefreshCw size={13} />
             Sync
           </button>
-          <button className="btn btn-primary">
+          <a href="/generate" className="btn btn-primary">
             <Sparkles size={13} />
             Generate Content
-          </button>
+          </a>
         </div>
       </div>
 
       {/* KPI grid */}
       <div className="kpi-grid fade-up fade-up-2">
-        {kpiData.map((k) => {
+        {kpiCards.map((k) => {
           const Icon = k.icon
           return (
             <div key={k.label} className="kpi-card">
               <div className="kpi-icon-wrap" style={{ background: k.bg }}>
                 <Icon style={{ color: k.color }} />
               </div>
-              <div className="kpi-value">{k.value}</div>
+              <div className="kpi-value">{loading ? '—' : k.value}</div>
               <div className="kpi-label">{k.label}</div>
-              <div className={`kpi-delta ${k.up ? 'up' : 'neutral'}`}>
-                {k.up && <TrendingUp size={10} />}
-                {k.delta}
-              </div>
             </div>
           )
         })}
@@ -180,37 +238,47 @@ export default function DashboardPage() {
           <div className="panel-header">
             <span className="panel-title">Recent Generations</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>187 total</span>
-              <span className="panel-action" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{totalOutputs} total</span>
+              <a href="/library" className="panel-action" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 View all <ArrowRight size={11} />
-              </span>
+              </a>
             </div>
           </div>
           <div className="panel-body">
-            {recentGenerations.map((gen) => (
-              <div key={gen.id} className="gen-row">
-                <PlatformDot platform={gen.platform} />
-                <div className="gen-meta">
-                  <div className="gen-title">{gen.title}</div>
-                  <div className="gen-sub">
-                    <span>{gen.brand}</span>
-                    <span style={{ color: 'var(--border-hover)' }}>·</span>
-                    <span>{gen.product}</span>
-                    <span style={{ color: 'var(--border-hover)' }}>·</span>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10.5,
-                      background: 'var(--surface-3)',
-                      padding: '1px 5px',
-                      borderRadius: 4,
-                      color: 'var(--text-tertiary)'
-                    }}>{gen.framework}</span>
+            {loading ? (
+              <div style={{ padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
+            ) : recentGenerations.length === 0 ? (
+              <div style={{ padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>No generations yet. <a href="/generate" style={{ color: 'var(--accent)' }}>Generate your first →</a></div>
+            ) : recentGenerations.map((gen: any) => {
+              const req = Array.isArray(gen.generation_requests) ? gen.generation_requests[0] : gen.generation_requests
+              const brandName = req?.brands?.name ?? '—'
+              const productName = req?.products?.name ?? '—'
+              const platform = req?.platform ?? 'instagram'
+              const status: StatusType = gen.status ?? 'draft'
+              return (
+                <div key={gen.id} className="gen-row">
+                  <PlatformDot platform={platform} />
+                  <div className="gen-meta">
+                    <div className="gen-title" style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {gen.hook || '(no hook)'}
+                    </div>
+                    <div className="gen-sub">
+                      <span>{brandName}</span>
+                      <span style={{ color: 'var(--border-hover)' }}>·</span>
+                      <span>{productName}</span>
+                      <span style={{ color: 'var(--border-hover)' }}>·</span>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 10.5,
+                        background: 'var(--surface-3)', padding: '1px 5px',
+                        borderRadius: 4, color: 'var(--text-tertiary)'
+                      }}>{platform}</span>
+                    </div>
                   </div>
+                  <StatusPill status={status} />
+                  <div className="gen-time">{timeAgo(gen.created_at)}</div>
                 </div>
-                <StatusPill status={gen.status} />
-                <div className="gen-time">{gen.time}</div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -261,7 +329,20 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className="panel-body">
-              {usageStats.map((u) => (
+              {[
+                {
+                  label: 'Approval rate',
+                  val: totalOutputs > 0 ? `${Math.round((libraryCounts.approved / totalOutputs) * 100)}%` : '—',
+                  pct: totalOutputs > 0 ? Math.round((libraryCounts.approved / totalOutputs) * 100) : 0,
+                  variant: 'green'
+                },
+                {
+                  label: 'Total outputs',
+                  val: String(totalOutputs),
+                  pct: Math.min(totalOutputs, 100),
+                  variant: 'default'
+                },
+              ].map((u) => (
                 <div key={u.label} className="usage-row">
                   <div className="usage-label-row">
                     <span className="usage-label">{u.label}</span>
@@ -270,7 +351,7 @@ export default function DashboardPage() {
                   <div className="usage-bar-track">
                     <div
                       className={`usage-bar-fill ${u.variant}`}
-                      style={{ width: u.val }}
+                      style={{ width: `${u.pct}%` }}
                     />
                   </div>
                 </div>
@@ -289,45 +370,49 @@ export default function DashboardPage() {
               <Brain size={14} style={{ color: 'var(--text-secondary)' }} />
               Brand Brains
             </span>
-            <a href="/brands/new" className="btn btn-secondary" style={{ padding: '5px 11px', fontSize: 12 }}>
+            <a href="/brands" className="btn btn-secondary" style={{ padding: '5px 11px', fontSize: 12 }}>
               <Plus size={12} />
               Add Brand
             </a>
           </div>
-          <div className="brand-mini-grid">
-            {brands.map((b) => (
-              <div key={b.name} className="brand-mini-card" style={{ position: 'relative', overflow: 'hidden', paddingLeft: 16 }}>
-                <div className="brand-color-bar" style={{ background: b.color }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                  <div className="brand-mini-dot" style={{ background: b.color, boxShadow: `0 0 6px ${b.color}` }} />
-                  <span className="brand-mini-name">{b.name}</span>
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: 10,
-                    padding: '1px 7px',
-                    borderRadius: 20,
-                    fontWeight: 600,
-                    background: b.status === 'active' ? 'var(--green-bg)' : 'var(--amber-bg)',
-                    color: b.status === 'active' ? 'var(--green)' : 'var(--amber)',
-                    border: `1px solid ${b.status === 'active' ? 'rgba(34,211,160,0.2)' : 'rgba(245,158,11,0.2)'}`
-                  }}>
-                    {b.status}
-                  </span>
-                </div>
-                <div className="brand-mini-cat">{b.category}</div>
-                <div className="brand-mini-stats">
-                  <div className="brand-stat">
-                    <span className="brand-stat-val">{b.products}</span>
-                    <span className="brand-stat-lbl">Products</span>
+          {loading ? (
+            <div style={{ padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading brands...</div>
+          ) : brandsData.length === 0 ? (
+            <div style={{ padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              No brands yet. <a href="/brands" style={{ color: 'var(--accent)' }}>Add your first brand →</a>
+            </div>
+          ) : (
+            <div className="brand-mini-grid">
+              {brandsData.map((b: any) => (
+                <a key={b.id} href="/brands" className="brand-mini-card" style={{ position: 'relative', overflow: 'hidden', paddingLeft: 16, textDecoration: 'none' }}>
+                  <div className="brand-color-bar" style={{ background: b.color }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                    <div className="brand-mini-dot" style={{ background: b.color, boxShadow: `0 0 6px ${b.color}` }} />
+                    <span className="brand-mini-name">{b.name}</span>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: 10, padding: '1px 7px', borderRadius: 20, fontWeight: 600,
+                      background: b.status === 'active' ? 'var(--green-bg)' : 'var(--amber-bg)',
+                      color: b.status === 'active' ? 'var(--green)' : 'var(--amber)',
+                      border: `1px solid ${b.status === 'active' ? 'rgba(34,211,160,0.2)' : 'rgba(245,158,11,0.2)'}`
+                    }}>
+                      {b.status}
+                    </span>
                   </div>
-                  <div className="brand-stat">
-                    <span className="brand-stat-val">{b.generations}</span>
-                    <span className="brand-stat-lbl">Outputs</span>
+                  <div className="brand-mini-cat">{b.category || 'Uncategorized'}</div>
+                  <div className="brand-mini-stats">
+                    <div className="brand-stat">
+                      <span className="brand-stat-val">{b.products}</span>
+                      <span className="brand-stat-lbl">Products</span>
+                    </div>
+                    <div className="brand-stat">
+                      <span className="brand-stat-val">{b.generations}</span>
+                      <span className="brand-stat-lbl">Outputs</span>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Content library summary */}
@@ -344,9 +429,9 @@ export default function DashboardPage() {
             </div>
             <div className="panel-body">
               {[
-                { label: 'Approved', count: 94, color: 'var(--green)', icon: CheckCircle2 },
-                { label: 'Draft', count: 51, color: 'var(--amber)', icon: Clock },
-                { label: 'Rejected', count: 42, color: 'var(--red)', icon: XCircle },
+                { label: 'Approved', count: libraryCounts.approved, color: 'var(--green)', icon: CheckCircle2 },
+                { label: 'Draft', count: libraryCounts.draft, color: 'var(--amber)', icon: Clock },
+                { label: 'Rejected', count: libraryCounts.rejected, color: 'var(--red)', icon: XCircle },
               ].map((item) => {
                 const Icon = item.icon
                 return (
@@ -361,11 +446,9 @@ export default function DashboardPage() {
                     <Icon size={14} style={{ color: item.color, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>{item.label}</span>
                     <span style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 18, fontWeight: 700,
-                      color: 'var(--text-primary)',
-                      letterSpacing: '-0.5px'
-                    }}>{item.count}</span>
+                      fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700,
+                      color: 'var(--text-primary)', letterSpacing: '-0.5px'
+                    }}>{loading ? '—' : item.count}</span>
                     <ChevronRight size={13} style={{ color: 'var(--text-tertiary)' }} />
                   </div>
                 )
@@ -375,7 +458,7 @@ export default function DashboardPage() {
                 <div style={{
                   fontFamily: 'var(--font-display)', fontSize: 32,
                   fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-1.5px'
-                }}>187</div>
+                }}>{loading ? '—' : totalOutputs}</div>
               </div>
             </div>
           </div>
@@ -386,16 +469,14 @@ export default function DashboardPage() {
             border: '1px solid var(--border-accent)'
           }}>
             <div style={{ padding: '18px 20px' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8
-              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Layers size={15} style={{ color: 'var(--accent)' }} />
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                   Learning Center
                 </span>
               </div>
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, marginBottom: 14 }}>
-                Your AI is learning from 187 outputs. PAS framework shows <strong style={{ color: 'var(--green)' }}>+23% higher approval rate</strong> this month.
+                Your AI is learning from {totalOutputs} outputs. Explore patterns and approval trends in your workspace.
               </p>
               <a href="/learning" className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 13px' }}>
                 <BookOpen size={12} />

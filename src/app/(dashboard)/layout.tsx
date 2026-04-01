@@ -6,6 +6,42 @@ import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
 import { supabase } from '@/lib/supabase'
 
+async function ensureWorkspace(userId: string, email: string) {
+  // Check if user already has a workspace role
+  const { data: roles } = await supabase
+    .from('user_workspace_roles')
+    .select('workspace_id')
+    .eq('user_id', userId)
+    .limit(1)
+
+  if (roles && roles.length > 0) return // already set up
+
+  // Create workspace
+  const name = email.split('@')[0]
+  const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000)
+
+  const { data: ws, error: wsErr } = await supabase
+    .from('workspaces')
+    .insert({ name: name + ' Workspace', slug, status: 'active', api_limit_usd: 20 })
+    .select('id')
+    .single()
+
+  if (wsErr || !ws) return
+
+  // Create workspace role
+  await supabase.from('user_workspace_roles').insert({
+    workspace_id: ws.id,
+    user_id: userId,
+    role: 'admin'
+  })
+
+  // Create user profile if missing
+  await supabase.from('user_profiles').upsert({
+    id: userId,
+    full_name: name
+  })
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -15,10 +51,11 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         router.push('/login')
       } else {
+        await ensureWorkspace(session.user.id, session.user.email ?? '')
         setLoading(false)
       }
     })
