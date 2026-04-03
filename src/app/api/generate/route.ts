@@ -72,14 +72,14 @@ ${fmtList(brand.donts)}
 - Vocabulary Whitelist: ${brand.vocabularyWhitelist?.join(', ') || 'None specified'}
 - Vocabulary Blacklist: ${brand.vocabularyBlacklist?.join(', ') || 'None specified'}
 
-PRODUCT BRAIN:
+${product ? `PRODUCT BRAIN:
 - Product: ${product.name} (${product.type || 'General'})
 - USP: ${product.usp || 'Not specified'}
 - RTB: ${product.rtb || 'Not specified'}
 - Key Claims: ${product.keyClaims?.join('; ') || 'Not specified'}
 - Target Audience: ${product.targetAudience || 'Same as brand'}
 - Mandatory Disclaimers: ${product.mandatoryDisclaimers || 'None'}
-- Emotional Benefits: ${product.emotionalBenefits || 'Not specified'}`.trim()
+- Emotional Benefits: ${product.emotionalBenefits || 'Not specified'}` : `PRODUCT BRAIN: Not applicable — this is brand-level content. Focus on brand values, pillars, and overall brand story rather than a specific product.`}`.trim()
 
     // User request (always fresh, never cached)
     const userPrompt = `Generate content with these parameters:

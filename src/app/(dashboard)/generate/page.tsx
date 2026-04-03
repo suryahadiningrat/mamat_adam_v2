@@ -102,14 +102,15 @@ export default function GeneratePage() {
   const availableProducts = products.filter(p => p.brand_id === form.brandId)
   const selectedProduct = availableProducts.find(p => p.id === form.productId)
 
+  const isGeneralMode = form.productId === '__general__'
   const canGenerate = form.brandId && form.productId && form.platform && form.objective
 
   // Safe extractors for the UI and API payload mapping
   const toneVoice = selectedBrand?.brand_brain_versions?.[0]?.tone_of_voice || 'Standard Professional'
-  const brainUSP = selectedProduct?.product_brain_versions?.[0]?.usp || 'Premium Quality'
+  const brainUSP = isGeneralMode ? 'Brand-level content' : (selectedProduct?.product_brain_versions?.[0]?.usp || 'Premium Quality')
 
   async function handleGenerate() {
-    if (!canGenerate || !selectedBrand || !selectedProduct) return
+    if (!canGenerate || !selectedBrand) return
     setLoading(true)
     setOutput(null)
     setLibrarySaved(false)
@@ -137,15 +138,17 @@ export default function GeneratePage() {
         vocabularyBlacklist: [],
         vocabularyWhitelist: []
       }
-      const promptProductPayload = {
-        name: selectedProduct.name,
-        usp: brainUSP,
-        rtb: '',
-        keyClaims: [],
-        mandatoryDisclaimers: '',
-        targetAudience: '',
-        emotionalBenefits: ''
-      }
+      const promptProductPayload = isGeneralMode
+        ? null
+        : {
+            name: selectedProduct!.name,
+            usp: selectedProduct!.product_brain_versions?.[0]?.usp || '',
+            rtb: '',
+            keyClaims: [],
+            mandatoryDisclaimers: '',
+            targetAudience: selectedProduct!.product_brain_versions?.[0]?.functional_benefits || '',
+            emotionalBenefits: ''
+          }
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -179,7 +182,7 @@ export default function GeneratePage() {
   }
 
   async function handleSaveToLibrary() {
-    if (!output || !workspaceId || !selectedBrand || !selectedProduct || !userId) return
+    if (!output || !workspaceId || !selectedBrand || !userId) return
     setSavingLibrary(true)
 
     try {
@@ -187,7 +190,7 @@ export default function GeneratePage() {
       const { data: reqData, error: reqErr } = await supabase.from('generation_requests').insert({
         workspace_id: workspaceId,
         brand_id: selectedBrand.id,
-        product_id: selectedProduct.id,
+        product_id: isGeneralMode ? null : (selectedProduct?.id ?? null),
         platform: form.platform,
         objective: form.objective,
         framework_id: null,
@@ -196,7 +199,7 @@ export default function GeneratePage() {
         visual_style: form.visualStyle,
         output_length: form.outputLength,
         additional_context: form.additionalContext,
-        source_context_summary: `Brand: ${selectedBrand.name}, Product: ${selectedProduct.name}, Framework: ${form.framework || 'PAS'}`,
+        source_context_summary: `Brand: ${selectedBrand.name}, Product: ${isGeneralMode ? 'General' : (selectedProduct?.name ?? '')}, Framework: ${form.framework || 'PAS'}`,
         status: 'completed',
         created_by: userId
       }).select('id').single()
@@ -306,14 +309,44 @@ export default function GeneratePage() {
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Select label="Brand" options={brands.map(b => b.name)} value={selectedBrand?.name || ''}
                 onChange={v => { set('brandId')(brands.find(b => b.name === v)?.id || ''); set('productId')('') }} placeholder="Select a brand" />
-              <Select label="Product" options={availableProducts.map(p => p.name)} value={selectedProduct?.name || ''}
-                onChange={v => set('productId')(availableProducts.find(p => p.name === v)?.id || '')} placeholder={form.brandId ? 'Select a product' : 'Select brand first'} />
+              {/* Product — General option + specific products */}
+              {form.brandId ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.3px' }}>Product</label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={form.productId}
+                      onChange={e => set('productId')(e.target.value)}
+                      style={{
+                        width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13.5,
+                        color: form.productId ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                        fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none', transition: 'border-color 0.15s'
+                      }}
+                      onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                      onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    >
+                      <option value="">Select a product</option>
+                      <option value="__general__">— General (Brand-level, no product) —</option>
+                      {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                  </div>
+                </div>
+              ) : (
+                <Select label="Product" options={[]} value="" onChange={() => {}} placeholder="Select brand first" />
+              )}
 
-              {selectedBrand && (
+              {selectedBrand && form.productId && (
                 <div style={{ background: 'var(--surface-4)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border)', fontSize: 12 }}>
                   <div style={{ color: 'var(--text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Brain Context</div>
                   <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}><span style={{ color: 'var(--accent)' }}>Tone:</span> {toneVoice}</div>
-                  {selectedProduct && <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 2 }}><span style={{ color: 'var(--green)' }}>USP:</span> {brainUSP}</div>}
+                  <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 2 }}>
+                    {isGeneralMode
+                      ? <><span style={{ color: 'var(--text-tertiary)' }}>Mode:</span> Brand-level content (no specific product)</>
+                      : <><span style={{ color: 'var(--green)' }}>USP:</span> {brainUSP}</>
+                    }
+                  </div>
                 </div>
               )}
             </div>
@@ -384,7 +417,7 @@ export default function GeneratePage() {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{selectedBrand?.name} / {selectedProduct?.name} / {form.platform}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{selectedBrand?.name} / {isGeneralMode ? 'General' : selectedProduct?.name} / {form.platform}</span>
                   <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--text-tertiary)' }}>{form.objective}</span>
                 </div>
                 <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleGenerate}><RefreshCw size={12} /> Regenerate All</button>
