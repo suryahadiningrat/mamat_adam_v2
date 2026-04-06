@@ -187,10 +187,11 @@ export default function TopicsPage() {
       setTopics(prev => prev.map(t => ({ ...t, saved: true })))
       setAllSaved(true)
     } catch (e: any) {
-      if (e.message?.includes('schema cache') || e.message?.includes('content_topics')) {
+      const msg = e.message || ''
+      if (msg.includes('schema cache') || msg.includes('relation "content_topics" does not exist')) {
         alert('Table not found.\n\nPlease run migrate_content_topics.sql in your Supabase SQL Editor first, then try again.')
       } else {
-        alert('Save failed: ' + e.message)
+        alert('Save failed: ' + msg)
       }
     } finally {
       setSaving(false)
