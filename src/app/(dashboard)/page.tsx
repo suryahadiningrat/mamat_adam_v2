@@ -93,7 +93,7 @@ export default function DashboardPage() {
     if (!user) return
 
     // Get workspace
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
+    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
     const wsId = roles?.[0]?.workspace_id
     if (!wsId) { setLoading(false); return }
 

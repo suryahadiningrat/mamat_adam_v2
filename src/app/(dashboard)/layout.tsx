@@ -7,46 +7,53 @@ import Topbar from '@/components/Topbar'
 import { supabase } from '@/lib/supabase'
 
 async function ensureWorkspace(userId: string, email: string) {
-  // Always ensure profile has email stored (needed for invite matching)
-  await supabase.from('user_profiles').upsert({
-    id: userId,
-    full_name: email.split('@')[0],
-    email: email
-  }, { onConflict: 'id', ignoreDuplicates: false })
+  // Always keep email in sync on profile
+  await supabase.from('user_profiles').upsert(
+    { id: userId, full_name: email.split('@')[0], email },
+    { onConflict: 'id', ignoreDuplicates: false }
+  )
 
-  // Check if user already has a workspace role
+  // Accept ALL pending invitations for this email — even if user already has a workspace.
+  // This handles existing users who were added to a new team workspace.
+  const { data: invites } = await supabase
+    .from('workspace_invitations')
+    .select('id, workspace_id, role')
+    .eq('invited_email', email)
+    .eq('status', 'pending')
+
+  for (const invite of invites || []) {
+    // Only insert if not already a member of this specific workspace
+    const { data: existing } = await supabase
+      .from('user_workspace_roles')
+      .select('id')
+      .eq('workspace_id', invite.workspace_id)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!existing) {
+      await supabase.from('user_workspace_roles').insert({
+        workspace_id: invite.workspace_id,
+        user_id: userId,
+        role: invite.role
+      })
+    }
+
+    await supabase.from('workspace_invitations').update({
+      status: 'accepted',
+      accepted_at: new Date().toISOString()
+    }).eq('id', invite.id)
+  }
+
+  // Check if user now has at least one workspace role
   const { data: roles } = await supabase
     .from('user_workspace_roles')
     .select('workspace_id')
     .eq('user_id', userId)
     .limit(1)
 
-  if (roles && roles.length > 0) return // already set up
+  if (roles && roles.length > 0) return // workspace exists (own or invited)
 
-  // Check for a pending invitation to an existing workspace
-  const { data: invite } = await supabase
-    .from('workspace_invitations')
-    .select('id, workspace_id, role')
-    .eq('invited_email', email)
-    .eq('status', 'pending')
-    .limit(1)
-    .single()
-
-  if (invite) {
-    // Join the invited workspace instead of creating a new one
-    await supabase.from('user_workspace_roles').insert({
-      workspace_id: invite.workspace_id,
-      user_id: userId,
-      role: invite.role
-    })
-    await supabase.from('workspace_invitations').update({
-      status: 'accepted',
-      accepted_at: new Date().toISOString()
-    }).eq('id', invite.id)
-    return
-  }
-
-  // No invitation — create a brand new workspace for this user
+  // No workspace at all — create a fresh personal workspace
   const name = email.split('@')[0]
   const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000)
 

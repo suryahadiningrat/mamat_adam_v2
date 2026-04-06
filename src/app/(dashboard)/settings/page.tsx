@@ -139,20 +139,50 @@ export default function SettingsPage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
-    if (!inviteEmail.trim()) return
+    const email = inviteEmail.trim().toLowerCase()
+    if (!email) return
     setInviting(true); setTeamError(''); setTeamMsg('')
-    const { error: err } = await supabase.from('workspace_invitations').insert({
-      workspace_id: workspaceId,
-      invited_email: inviteEmail.trim().toLowerCase(),
-      invited_by: userId,
-      role: inviteRole
-    })
-    if (err) {
-      setTeamError(err.message.includes('unique') ? 'This email already has a pending invite.' : err.message)
+
+    // Check if user already exists in user_profiles
+    const { data: existingProfile } = await supabase
+      .from('user_profiles').select('id').eq('email', email).maybeSingle()
+
+    if (existingProfile) {
+      // User exists — add directly to workspace_roles
+      const { data: alreadyMember } = await supabase.from('user_workspace_roles')
+        .select('id').eq('workspace_id', workspaceId).eq('user_id', existingProfile.id).maybeSingle()
+
+      if (alreadyMember) {
+        setTeamError('This user is already a member of this workspace.')
+      } else {
+        const { error: err } = await supabase.from('user_workspace_roles').insert({
+          workspace_id: workspaceId,
+          user_id: existingProfile.id,
+          role: inviteRole
+        })
+        if (err) {
+          setTeamError(err.message)
+        } else {
+          setTeamMsg(`${email} has been added to the workspace immediately.`)
+          setInviteEmail('')
+          await loadTeam(workspaceId, userId)
+        }
+      }
     } else {
-      setTeamMsg(`Invite sent to ${inviteEmail}. They'll join this workspace on next login.`)
-      setInviteEmail('')
-      await loadTeam(workspaceId, userId)
+      // User doesn't exist yet — create invitation for when they sign up
+      const { error: err } = await supabase.from('workspace_invitations').insert({
+        workspace_id: workspaceId,
+        invited_email: email,
+        invited_by: userId,
+        role: inviteRole
+      })
+      if (err) {
+        setTeamError(err.message.includes('unique') ? 'This email already has a pending invite.' : err.message)
+      } else {
+        setTeamMsg(`Invite created for ${email}. They'll join this workspace when they sign up or next log in.`)
+        setInviteEmail('')
+        await loadTeam(workspaceId, userId)
+      }
     }
     setInviting(false)
   }
@@ -428,7 +458,7 @@ export default function SettingsPage() {
               </div>
               <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
-                  Enter the person's email. When they sign up (or next time they log in), they'll automatically join this workspace.
+                  Enter the person's email. If they already have an account, they'll be added immediately. Otherwise, an invite is created and they'll join when they sign up.
                 </p>
 
                 {teamError && (

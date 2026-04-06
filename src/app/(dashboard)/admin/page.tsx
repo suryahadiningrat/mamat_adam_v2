@@ -145,20 +145,52 @@ export default function AdminPage() {
 
   async function handleSendInvite(e: React.FormEvent) {
     e.preventDefault()
-    if (!inviteEmail || !inviteWsId) return
+    const email = inviteEmail.trim().toLowerCase()
+    if (!email || !inviteWsId) return
     setInviting(true); setInviteMsg('')
-    const { error: err } = await supabase.from('workspace_invitations').insert({
-      workspace_id: inviteWsId,
-      invited_email: inviteEmail.trim().toLowerCase(),
-      invited_by: currentUserId,
-      role: inviteRole
-    })
-    if (err) {
-      setInviteMsg('Error: ' + (err.message.includes('unique') ? 'Already has a pending invite.' : err.message))
+
+    // Check if user already has an account
+    const { data: existingProfile } = await supabase
+      .from('user_profiles').select('id').eq('email', email).maybeSingle()
+
+    if (existingProfile) {
+      // User exists — add directly to workspace_roles
+      const { data: alreadyMember } = await supabase.from('user_workspace_roles')
+        .select('id').eq('workspace_id', inviteWsId).eq('user_id', existingProfile.id).maybeSingle()
+
+      if (alreadyMember) {
+        setInviteMsg('Error: This user is already a member of this workspace.')
+      } else {
+        const { error: err } = await supabase.from('user_workspace_roles').insert({
+          workspace_id: inviteWsId,
+          user_id: existingProfile.id,
+          role: inviteRole
+        })
+        if (err) {
+          setInviteMsg('Error: ' + err.message)
+        } else {
+          setInviteMsg(`✓ ${email} added to workspace immediately.`)
+          setInviteEmail('')
+          await loadWsDetails(inviteWsId)
+          // Update member count in workspace list
+          setWorkspaces(prev => prev.map(w => w.id === inviteWsId ? { ...w, member_count: w.member_count + 1 } : w))
+        }
+      }
     } else {
-      setInviteMsg(`✓ Invite sent to ${inviteEmail}`)
-      setInviteEmail('')
-      await loadWsDetails(inviteWsId)
+      // User doesn't exist yet — create invitation
+      const { error: err } = await supabase.from('workspace_invitations').insert({
+        workspace_id: inviteWsId,
+        invited_email: email,
+        invited_by: currentUserId,
+        role: inviteRole
+      })
+      if (err) {
+        setInviteMsg('Error: ' + (err.message.includes('unique') ? 'Already has a pending invite.' : err.message))
+      } else {
+        setInviteMsg(`✓ Invite created for ${email} — they'll join on next login.`)
+        setInviteEmail('')
+        await loadWsDetails(inviteWsId)
+      }
     }
     setInviting(false)
   }

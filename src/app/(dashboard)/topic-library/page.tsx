@@ -78,7 +78,7 @@ export default function TopicLibraryPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
+      const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
       if (!roles?.[0]) { setLoading(false); return }
       const wsId = roles[0].workspace_id
 
