@@ -114,7 +114,7 @@ export default function DashboardPage() {
       supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
       supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
       supabase.from('generation_outputs').select(`
-        id, hook, status, created_at, workspace_id,
+        id, copy_on_visual, slides, scenes, status, created_at, workspace_id,
         generation_requests ( platform, framework_id, brand_id, brands ( name ), products ( name ) )
       `).eq('workspace_id', wsId).order('created_at', { ascending: false }).limit(6),
       supabase.from('generation_outputs').select('status').eq('workspace_id', wsId),
@@ -260,7 +260,7 @@ export default function DashboardPage() {
                   <PlatformDot platform={platform} />
                   <div className="gen-meta">
                     <div className="gen-title" style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {gen.hook || '(no hook)'}
+                      {gen.copy_on_visual || (gen.slides ? '[Carousel Format]' : gen.scenes ? '[Video Format]' : '(no copy)')}
                     </div>
                     <div className="gen-sub">
                       <span>{brandName}</span>

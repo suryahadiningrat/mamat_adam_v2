@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Brain, Plus, Trash2, X, Save, AlertCircle, Package } from 'lucide-react'
+import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud } from 'lucide-react'
 
 type Brand = {
   id: string
@@ -12,6 +12,7 @@ type Product = {
   id: string
   name: string
   slug: string
+  image_url?: string
   product_type: string
   summary: string
   brand_id: string
@@ -40,6 +41,7 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formData, setFormData] = useState({
     name: '',
+    image_url: '',
     product_type: '',
     summary: '',
     brand_id: '',
@@ -52,6 +54,36 @@ export default function ProductsPage() {
   })
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    setUploadingImage(true)
+    setErrorMsg('')
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`
+      const filePath = `${workspaceId}/${fileName}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('product_images')
+        .upload(filePath, file)
+        
+      if (uploadError) throw uploadError
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('product_images')
+        .getPublicUrl(filePath)
+        
+      setFormData(prev => ({ ...prev, image_url: publicUrl }))
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error uploading image')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -71,7 +103,7 @@ export default function ProductsPage() {
     const [{ data: brandsData }, { data: productsData }] = await Promise.all([
       supabase.from('brands').select('id, name').eq('workspace_id', wsId).order('name'),
       supabase.from('products').select(`
-        id, name, slug, product_type, summary, brand_id,
+        id, name, slug, image_url, product_type, summary, brand_id,
         brands ( id, name ),
         product_brain_versions (
           id, usp, rtb, functional_benefits, emotional_benefits, target_audience, price_tier
@@ -107,6 +139,7 @@ export default function ProductsPage() {
       setEditingProduct(product)
       setFormData({
         name: product.name || '',
+        image_url: product.image_url || '',
         product_type: product.product_type || '',
         summary: product.summary || '',
         brand_id: product.brand_id || '',
@@ -120,7 +153,7 @@ export default function ProductsPage() {
     } else {
       setEditingProduct(null)
       setFormData({
-        name: '', product_type: '', summary: '', brand_id: brands[0]?.id || '',
+        name: '', image_url: '', product_type: '', summary: '', brand_id: brands[0]?.id || '',
         usp: '', rtb: '', functional_benefits: '', emotional_benefits: '',
         target_audience: '', price_tier: ''
       })
@@ -145,6 +178,7 @@ export default function ProductsPage() {
       if (editingProduct) {
         await supabase.from('products').update({
           name: formData.name,
+          image_url: formData.image_url,
           product_type: formData.product_type,
           summary: formData.summary,
           brand_id: formData.brand_id,
@@ -182,6 +216,7 @@ export default function ProductsPage() {
           brand_id: formData.brand_id,
           name: formData.name,
           slug,
+          image_url: formData.image_url,
           product_type: formData.product_type,
           summary: formData.summary,
           status: 'active'
@@ -232,13 +267,13 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <div className="fade-up fade-up-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+      <div className="fade-up fade-up-2" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         {loading ? (
           <div style={{ padding: 20, color: 'var(--text-tertiary)' }}>Loading products...</div>
         ) : products.length === 0 ? (
           <div style={{
             padding: 40, textAlign: 'center', background: 'var(--surface-2)',
-            borderRadius: 12, border: '1px dashed var(--border)', gridColumn: '1 / -1'
+            borderRadius: 12, border: '1px dashed var(--border)'
           }}>
             <Package size={32} style={{ color: 'var(--text-tertiary)', marginBottom: 16, margin: '0 auto' }} />
             <h3 style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 8 }}>No Products Yet</h3>
@@ -250,58 +285,87 @@ export default function ProductsPage() {
             </button>
           </div>
         ) : (
-          products.map(product => (
-            <div key={product.id} className="panel" style={{ cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-                 onClick={() => handleOpenModal(product)}>
-
-              <button onClick={(e) => handleDelete(product.id, e)} style={{
-                position: 'absolute', top: 12, right: 12, background: 'none', border: 'none',
-                color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, zIndex: 10
-              }} title="Delete Product">
-                <Trash2 size={14} />
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600, fontSize: 18
-                }}>
-                  {product.name.charAt(0)}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{product.name}</h3>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    {product.brand?.name || 'No Brand'}{product.product_type ? ` · ${product.product_type}` : ''}
+          brands.filter(b => products.some(p => p.brand_id === b.id)).map(brand => {
+            const brandProducts = products.filter(p => p.brand_id === brand.id)
+            return (
+              <div key={brand.id}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                    {brand.name.charAt(0)}
                   </div>
+                  <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{brand.name}</h2>
+                  <span style={{ background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>{brandProducts.length}</span>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
+                  {brandProducts.map(product => (
+                    <div key={product.id} className="panel" style={{ cursor: 'pointer', transition: 'all 0.2s', position: 'relative', padding: 24, display: 'flex', flexDirection: 'column' }}
+                         onClick={() => handleOpenModal(product)}>
+
+                      <button onClick={(e) => handleDelete(product.id, e)} style={{
+                        position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: 6,
+                        color: 'white', cursor: 'pointer', padding: 6, zIndex: 10, backdropFilter: 'blur(4px)'
+                      }} title="Delete Product">
+                        <Trash2 size={14} />
+                      </button>
+
+                      {product.image_url ? (
+                        <div style={{ position: 'relative', width: 'calc(100% + 48px)', margin: '-24px -24px 20px -24px', height: 160, borderRadius: '12px 12px 0 0', overflow: 'hidden', background: 'var(--surface-2)' }}>
+                          <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{ position: 'relative', width: 'calc(100% + 48px)', margin: '-24px -24px 20px -24px', height: 80, borderRadius: '12px 12px 0 0', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(99, 102, 241, 0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           <ImageIcon size={24} style={{ color: 'rgba(59, 130, 246, 0.4)' }} />
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        {!product.image_url && (
+                          <div style={{
+                            width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600, fontSize: 18, flexShrink: 0
+                          }}>
+                            {product.name.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{product.name}</h3>
+                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                            {product.product_type ? product.product_type : 'Product'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 'auto', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 40 }}>
+                        {product.summary || 'No summary provided.'}
+                      </p>
+
+                      <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: 12, border: '1px solid var(--border)', marginTop: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                          <Brain size={12} style={{ color: '#3b82f6' }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Product Brain</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>USP</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {product.brain?.usp || '-'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Price Tier</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {product.brain?.price_tier || '-'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {product.summary || 'No summary provided.'}
-              </p>
-
-              <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: 12, border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <Brain size={12} style={{ color: '#3b82f6' }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Product Brain</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>USP</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {product.brain?.usp || '-'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Price Tier</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {product.brain?.price_tier || '-'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 
@@ -347,6 +411,34 @@ export default function ProductsPage() {
                     <option value="">Select a brand...</option>
                     {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Product Image</label>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  {formData.image_url ? (
+                    <div style={{ position: 'relative', width: 80, height: 80, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                      <img src={formData.image_url} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => setFormData({...formData, image_url: ''})} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--surface-2)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)' }}>
+                      <ImageIcon size={24} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <UploadCloud size={16} />
+                      {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} disabled={uploadingImage} />
+                    </label>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                      Recommended size: 800x600px. JPG or PNG.
+                    </div>
+                  </div>
                 </div>
               </div>
 

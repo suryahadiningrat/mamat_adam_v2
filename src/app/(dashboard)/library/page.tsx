@@ -19,10 +19,12 @@ const statusConfig: Record<Status, { label: string; cls: string; Icon: typeof Ch
 
 type OutputRecord = {
   id: string
-  hook: string
-  main_copy: string
+  copy_on_visual: string
+  caption: string
   cta_options: string[]
   hashtag_pack: string[]
+  slides?: any[]
+  scenes?: any[]
   status: Status
   created_at: string
   request: {
@@ -56,7 +58,7 @@ export default function LibraryPage() {
     const { data, error } = await supabase
       .from('generation_outputs')
       .select(`
-        id, hook, main_copy, cta_options, hashtag_pack, status, created_at,
+        id, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, status, created_at,
         request:generation_requests (
           platform,
           brand:brands(name),
@@ -80,8 +82,8 @@ export default function LibraryPage() {
 
   const filtered = items.filter(item => {
     const brandName = item.request?.brand?.name || ''
-    const matchSearch = item.hook?.toLowerCase().includes(search.toLowerCase()) ||
-                        item.main_copy?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = item.copy_on_visual?.toLowerCase().includes(search.toLowerCase()) ||
+                        item.caption?.toLowerCase().includes(search.toLowerCase()) ||
                         brandName.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || item.status === statusFilter
     const matchPlatform = platformFilter === 'all' || item.request?.platform === platformFilter
@@ -131,8 +133,8 @@ export default function LibraryPage() {
           <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 4 }}>1,432 likes</div>
           <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.45 }}>
             <span style={{ fontWeight: 600, marginRight: 6 }}>{handle}</span>
-            {item.hook}<br /><br />
-            {item.main_copy}<br /><br />
+            {item.copy_on_visual}<br /><br />
+            {item.caption}<br /><br />
             <span style={{ fontWeight: 600 }}>{item.cta_options?.[0]}</span><br /><br />
             <span style={{ color: '#00376b' }}>{item.hashtag_pack?.join(' ')}</span>
           </div>
@@ -155,8 +157,8 @@ export default function LibraryPage() {
               <span style={{ color: '#71767b', fontSize: 13 }}>@{handle}</span>
             </div>
             <div style={{ fontSize: 14, color: '#e7e9ea', lineHeight: 1.5, marginTop: 6, whiteSpace: 'pre-wrap' }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>{item.hook}</span>
-              {'\n\n'}{item.main_copy}{'\n\n'}
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{item.copy_on_visual}</span>
+              {'\n\n'}{item.caption}{'\n\n'}
               {item.cta_options?.[0]}{'\n\n'}
               <span style={{ color: '#1d9bf0' }}>{item.hashtag_pack?.join(' ')}</span>
             </div>
@@ -194,7 +196,7 @@ export default function LibraryPage() {
           <div style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '20px 0 0' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 6 }}>@{handle}</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {item.hook} {item.main_copy}
+              {item.copy_on_visual} {item.caption}
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: '#ee1d52' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
           </div>
@@ -219,14 +221,14 @@ export default function LibraryPage() {
         <div style={{ padding: '10px 12px', display: 'flex', gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ff0000', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>{initial}</div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f1f1', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.hook}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f1f1', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.copy_on_visual}</div>
             <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{handle} · 12K views · 3 days ago</div>
           </div>
         </div>
         {/* Description */}
         <div style={{ padding: '0 12px 12px', background: '#161616', borderRadius: 8, margin: '0 12px 12px', fontSize: 12.5, color: '#aaa', lineHeight: 1.5 }}>
           <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.main_copy}
+            {item.caption}
           </div>
           <div style={{ marginTop: 6, color: '#3ea6ff', fontSize: 12 }}>{item.cta_options?.[0]}</div>
           <div style={{ marginTop: 4, color: '#3ea6ff', fontSize: 11 }}>{item.hashtag_pack?.slice(0, 3).join(' ')}</div>
@@ -257,9 +259,9 @@ export default function LibraryPage() {
           </div>
         </div>
         <div style={{ padding: '14px 16px', background: 'white' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#000', marginBottom: 8 }}>{item.hook}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#000', marginBottom: 8 }}>{item.copy_on_visual}</div>
           <div style={{ fontSize: 14, color: '#333', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.main_copy}
+            {item.caption}
           </div>
           <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, color: '#0a66c2' }}>{item.cta_options?.[0]}</div>
           <div style={{ marginTop: 8, fontSize: 12, color: '#0a66c2' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
@@ -287,8 +289,8 @@ export default function LibraryPage() {
         <div style={{ display: 'inline-block', padding: '4px 10px', background: `${platformColors[platform] || '#888'}18`, color: platformColors[platform] || '#888', borderRadius: 20, fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
           {platform}
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>{item.hook}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.main_copy}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>{item.copy_on_visual}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.caption}</div>
         <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 12 }}>{item.cta_options?.[0]}</div>
         <div style={{ fontSize: 13, color: 'var(--green)' }}>{item.hashtag_pack?.join(' ')}</div>
@@ -347,7 +349,7 @@ export default function LibraryPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-1)' }}>
-                {['Content Hook', 'Brand', 'Platform', 'Status', 'Generated', ''].map(h => (
+                {['Copy On Visual', 'Brand', 'Platform', 'Status', 'Generated', ''].map(h => (
                   <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -367,7 +369,7 @@ export default function LibraryPage() {
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                     onClick={() => setMockupItem(item)}>
                     <td style={{ padding: '12px 16px', maxWidth: 350 }}>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.hook}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.copy_on_visual || (item.slides ? '[Carousel Format]' : item.scenes ? '[Video Format]' : '')}</div>
                     </td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{item.request?.brand?.name || 'Unknown'}</div>
@@ -415,7 +417,7 @@ export default function LibraryPage() {
                 {mockupItem.request?.platform} Preview
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => navigator.clipboard.writeText([mockupItem.hook, mockupItem.main_copy, mockupItem.cta_options?.[0], mockupItem.hashtag_pack?.join(' ')].filter(Boolean).join('\n\n'))}
+                <button onClick={() => navigator.clipboard.writeText([mockupItem?.copy_on_visual, mockupItem?.caption, mockupItem?.cta_options?.[0], mockupItem?.hashtag_pack?.join(' ')].filter(Boolean).join('\n\n'))}
                   className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }}>
                   <Copy size={11} /> Copy All
                 </button>
