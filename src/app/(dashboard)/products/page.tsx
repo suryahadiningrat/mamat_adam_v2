@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud } from 'lucide-react'
 
 type Brand = {
@@ -31,10 +32,10 @@ type ProductBrain = {
 }
 
 export default function ProductsPage() {
+  const { workspaceId } = useWorkspace()
   const [products, setProducts] = useState<Product[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
-  const [workspaceId, setWorkspaceId] = useState<string>('')
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -86,19 +87,13 @@ export default function ProductsPage() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (workspaceId) loadData()
+  }, [workspaceId])
 
   async function loadData() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    if (!roles?.[0]) { setLoading(false); return }
-
-    const wsId = roles[0].workspace_id
-    setWorkspaceId(wsId)
+    const wsId = workspaceId
+    if (!wsId) { setLoading(false); return }
 
     const [{ data: brandsData }, { data: productsData }] = await Promise.all([
       supabase.from('brands').select('id, name').eq('workspace_id', wsId).order('name'),

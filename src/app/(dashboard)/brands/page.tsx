@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Brain, Plus, Trash2, X, Save, AlertCircle, Globe, Sparkles,
   Building2, Mic, Target, Layers, Shield, Check, ChevronRight, ExternalLink
@@ -65,9 +66,9 @@ const SECTIONS = [
 ]
 
 export default function BrandsPage() {
+  const { workspaceId } = useWorkspace()
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
-  const [workspaceId, setWorkspaceId] = useState('')
 
   const [isOpen, setIsOpen] = useState(false)
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null)
@@ -79,18 +80,12 @@ export default function BrandsPage() {
   const [scrapeError, setScrapeError] = useState('')
   const [valueInput, setValueInput] = useState('')
 
-  useEffect(() => { loadBrands() }, [])
+  useEffect(() => { if (workspaceId) loadBrands() }, [workspaceId])
 
   async function loadBrands() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    if (!roles?.[0]) { setLoading(false); return }
-
-    const wsId = roles[0].workspace_id
-    setWorkspaceId(wsId)
+    const wsId = workspaceId
+    if (!wsId) { setLoading(false); return }
 
     // Heal orphaned brands (workspace_id = null) from before workspace setup
     await supabase.from('brands').update({ workspace_id: wsId }).is('workspace_id', null)

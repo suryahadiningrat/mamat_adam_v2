@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
 import { supabase } from '@/lib/supabase'
+import { WorkspaceProvider } from '@/contexts/WorkspaceContext'
 
 async function ensureWorkspace(userId: string, email: string) {
   // Always keep email in sync on profile
@@ -110,12 +111,14 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar />
-      <Topbar />
-      <main className="main-content">
-        {children}
-      </main>
-    </div>
+    <WorkspaceProvider>
+      <div className="app-shell">
+        <Sidebar />
+        <Topbar />
+        <main className="main-content">
+          {children}
+        </main>
+      </div>
+    </WorkspaceProvider>
   )
 }

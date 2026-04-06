@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ChevronDown, Heart, MessageCircle, Send, Bookmark, Repeat2, BarChart2, Image, ThumbsUp, Share2, Play } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 type Status = 'approved' | 'draft' | 'rejected'
 type Platform = 'Instagram' | 'TikTok' | 'YouTube' | 'Twitter/X' | 'LinkedIn' | 'Facebook'
@@ -38,25 +39,19 @@ type OutputRecord = {
 }
 
 export default function LibraryPage() {
+  const { workspaceId } = useWorkspace()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [items, setItems] = useState<OutputRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [workspaceId, setWorkspaceId] = useState('')
   const [mockupItem, setMockupItem] = useState<OutputRecord | null>(null)
   const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const loadData = useCallback(async () => {
+    if (!workspaceId) return
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    if (!roles?.[0]) { setLoading(false); return }
-
-    const wsId = roles[0].workspace_id
-    setWorkspaceId(wsId)
+    const wsId = workspaceId
 
     const { data, error } = await supabase
       .from('generation_outputs')
@@ -80,7 +75,7 @@ export default function LibraryPage() {
       setItems(parsed)
     }
     setLoading(false)
-  }, [])
+  }, [workspaceId])
 
   useEffect(() => { loadData() }, [loadData])
 

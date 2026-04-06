@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Brain, Package, Zap, Megaphone,
   Plus, ArrowRight,
@@ -77,6 +78,7 @@ function greeting() {
 const brandColors = ['#7c6dfa', '#e1306c', '#22d3a0', '#f59e0b', '#38bdf8', '#ec4899', '#a78bfa', '#34d399']
 
 export default function DashboardPage() {
+  const { workspaceId } = useWorkspace()
   const [userName, setUserName] = useState('there')
   const [kpis, setKpis] = useState({ brands: 0, products: 0, generations: 0, campaigns: 0 })
   const [recentGenerations, setRecentGenerations] = useState<any[]>([])
@@ -85,16 +87,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadDashboard()
-  }, [])
+    if (workspaceId) loadDashboard()
+  }, [workspaceId])
 
   async function loadDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Get workspace
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    const wsId = roles?.[0]?.workspace_id
+    const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
     // All data in parallel

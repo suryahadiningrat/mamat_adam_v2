@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { Layers, TrendingUp, CheckCircle2, Clock, XCircle, Brain, Zap, Target, BarChart3, Sparkles } from 'lucide-react'
 
 export default function LearningPage() {
+  const { workspaceId } = useWorkspace()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalOutputs: 0,
@@ -17,15 +19,11 @@ export default function LearningPage() {
   const [objectiveStats, setObjectiveStats] = useState<{ name: string; count: number }[]>([])
   const [recentActivity, setRecentActivity] = useState<any[]>([])
 
-  useEffect(() => { loadInsights() }, [])
+  useEffect(() => { if (workspaceId) loadInsights() }, [workspaceId])
 
   async function loadInsights() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    const wsId = roles?.[0]?.workspace_id
+    const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
     // Fetch all outputs with their request details

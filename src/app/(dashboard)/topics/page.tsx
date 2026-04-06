@@ -5,6 +5,7 @@ import {
   Calendar, Tag, Layout, Trash2, CheckCircle2, ArrowRight, Save
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 const platforms = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'LinkedIn', 'Facebook']
 
@@ -71,9 +72,9 @@ function pillarColor(pillar: string): string {
 }
 
 export default function TopicsPage() {
+  const { workspaceId } = useWorkspace()
   const [brands, setBrands] = useState<DBBrand[]>([])
   const [products, setProducts] = useState<DBProduct[]>([])
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
@@ -92,23 +93,20 @@ export default function TopicsPage() {
   const [allSaved, setAllSaved] = useState(false)
 
   useEffect(() => {
+    if (!workspaceId) return
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
-      const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-      if (!roles?.[0]) return
-      const wsId = roles[0].workspace_id
-      setWorkspaceId(wsId)
       const [{ data: bData }, { data: pData }] = await Promise.all([
-        supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, audience_persona, messaging_rules, source_summary, brand_promise)').eq('workspace_id', wsId),
-        supabase.from('products').select('id, brand_id, name, product_brain_versions(usp)').eq('workspace_id', wsId)
+        supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, audience_persona, messaging_rules, source_summary, brand_promise)').eq('workspace_id', workspaceId),
+        supabase.from('products').select('id, brand_id, name, product_brain_versions(usp)').eq('workspace_id', workspaceId)
       ])
       if (bData) setBrands(bData as DBBrand[])
       if (pData) setProducts(pData as DBProduct[])
     }
     init()
-  }, [])
+  }, [workspaceId])
 
   const selectedBrand = brands.find(b => b.id === form.brandId)
   const availableProducts = products.filter(p => p.brand_id === form.brandId)

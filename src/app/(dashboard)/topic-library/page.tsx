@@ -5,6 +5,7 @@ import {
   ChevronDown, RefreshCw, Brain, Layers
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 type Topic = {
   id: string
@@ -63,6 +64,7 @@ function fmtDate(d: string | null) {
 }
 
 export default function TopicLibraryPage() {
+  const { workspaceId } = useWorkspace()
   const [groups, setGroups] = useState<BrandGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [filterPlatform, setFilterPlatform] = useState('')
@@ -72,15 +74,11 @@ export default function TopicLibraryPage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!workspaceId) return
     setLoading(true)
     setError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-      if (!roles?.[0]) { setLoading(false); return }
-      const wsId = roles[0].workspace_id
+      const wsId = workspaceId
 
       let query = supabase
         .from('content_topics')
@@ -121,7 +119,7 @@ export default function TopicLibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterPlatform, filterStatus])
+  }, [workspaceId, filterPlatform, filterStatus])
 
   useEffect(() => { load() }, [load])
 

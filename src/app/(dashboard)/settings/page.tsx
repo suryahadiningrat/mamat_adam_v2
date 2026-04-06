@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   User, Building2, DollarSign, Save, CheckCircle2, AlertCircle,
   Users, Mail, UserPlus, Trash2, Shield, ChevronDown, RefreshCw
@@ -32,6 +33,7 @@ const roleColors: Record<string, { bg: string; text: string }> = {
 }
 
 export default function SettingsPage() {
+  const { workspaceId: ctxWorkspaceId, refreshWorkspaces } = useWorkspace()
   const [activeTab, setActiveTab] = useState<Tab>('Profile')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
@@ -54,7 +56,7 @@ export default function SettingsPage() {
   const [teamError, setTeamError] = useState('')
   const [teamMsg, setTeamMsg] = useState('')
 
-  useEffect(() => { loadSettings() }, [])
+  useEffect(() => { if (ctxWorkspaceId) loadSettings() }, [ctxWorkspaceId])
 
   async function loadSettings() {
     setLoading(true)
@@ -63,12 +65,13 @@ export default function SettingsPage() {
     setUserId(user.id)
     setProfile(p => ({ ...p, email: user.email ?? '' }))
 
-    const { data: roles } = await supabase.from('user_workspace_roles')
-      .select('workspace_id, role').eq('user_id', user.id).limit(1)
-    const wsId = roles?.[0]?.workspace_id
+    const wsId = ctxWorkspaceId
     if (!wsId) { setLoading(false); return }
     setWorkspaceId(wsId)
-    setUserRole(roles?.[0]?.role || 'editor')
+
+    const { data: roleRow } = await supabase.from('user_workspace_roles')
+      .select('role').eq('user_id', user.id).eq('workspace_id', wsId).single()
+    setUserRole(roleRow?.role || 'editor')
 
     const [profileRes, wsRes] = await Promise.all([
       supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
@@ -135,6 +138,7 @@ export default function SettingsPage() {
     }).eq('id', workspaceId)
     if (err) { setError(err.message); setSaving(null); return }
     setSaving(null); showSaved('workspace')
+    refreshWorkspaces()
   }
 
   async function handleInvite(e: React.FormEvent) {

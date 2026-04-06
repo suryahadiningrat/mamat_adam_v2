@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Megaphone, Plus, Brain, Package, Target, Calendar,
   DollarSign, Layers, Copy, Save, Check, AlertCircle,
@@ -15,11 +16,10 @@ const CHANNELS = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'LinkedIn', 'Fa
 const OBJECTIVES = ['Brand Awareness', 'Product Launch', 'Engagement', 'Lead Generation', 'Conversion', 'Retention', 'Event Promotion']
 
 function CampaignsContent() {
+  const { workspaceId } = useWorkspace()
   const searchParams = useSearchParams()
   const preselectedBrandId = searchParams.get('brandId') || ''
   const preselectedProductId = searchParams.get('productId') || ''
-
-  const [workspaceId, setWorkspaceId] = useState<string>('')
   const [brands, setBrands] = useState<Brand[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
@@ -48,17 +48,12 @@ function CampaignsContent() {
   const [saved, setSaved] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { if (workspaceId) loadData() }, [workspaceId])
 
   async function loadData() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-    if (!roles?.[0]) { setLoading(false); return }
-    const wsId = roles[0].workspace_id
-    setWorkspaceId(wsId)
+    const wsId = workspaceId
+    if (!wsId) { setLoading(false); return }
 
     const [brandsRes, productsRes, campaignsRes] = await Promise.all([
       supabase.from('brands').select('id, name, category, brand_brain_versions(brand_personality, tone_of_voice, brand_promise, target_audience)').eq('workspace_id', wsId).order('name'),

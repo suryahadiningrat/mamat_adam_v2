@@ -7,6 +7,7 @@ import {
   Plus, Trash2, Film, Layers, Monitor, type LucideIcon
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 // ─── Platform → Available Formats ────────────────────────────────────────────
 const platformFormats: Record<string, { label: string; icon: string; isVideo: boolean; isCarousel: boolean }[]> = {
@@ -200,31 +201,26 @@ export default function GeneratePage() {
     outputLength: '', additionalContext: ''
   })
 
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const { workspaceId } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
   const [brands, setBrands] = useState<DBBrand[]>([])
   const [products, setProducts] = useState<DBProduct[]>([])
 
   useEffect(() => {
+    if (!workspaceId) return
     async function initData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
 
-      const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-      if (roles?.[0]) {
-        const wsId = roles[0].workspace_id
-        setWorkspaceId(wsId)
+      const { data: bData } = await supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, brand_values, brand_promise, source_summary, audience_persona, messaging_rules)').eq('workspace_id', workspaceId)
+      if (bData) setBrands(bData as DBBrand[])
 
-        const { data: bData } = await supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, brand_values, brand_promise, source_summary, audience_persona, messaging_rules)').eq('workspace_id', wsId)
-        if (bData) setBrands(bData as DBBrand[])
-
-        const { data: pData } = await supabase.from('products').select('id, brand_id, name, product_brain_versions(usp, functional_benefits)').eq('workspace_id', wsId)
-        if (pData) setProducts(pData as DBProduct[])
-      }
+      const { data: pData } = await supabase.from('products').select('id, brand_id, name, product_brain_versions(usp, functional_benefits)').eq('workspace_id', workspaceId)
+      if (pData) setProducts(pData as DBProduct[])
     }
     initData()
-  }, [])
+  }, [workspaceId])
 
   // Apply URL params (from Topic Generator / Topic Library) after data loads
   useEffect(() => {
