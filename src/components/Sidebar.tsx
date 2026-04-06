@@ -3,27 +3,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   LayoutDashboard, Brain, Package, Zap, Megaphone,
-  Library, Lightbulb, Settings, ChevronDown, User, LogOut
+  Library, Lightbulb, Settings, ChevronDown, LogOut
 } from 'lucide-react'
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/', active: true },
-  { divider: true, label: 'Core' },
-  { icon: Brain, label: 'Brand Brain', href: '/brands', badge: '4' },
-  { icon: Package, label: 'Product Brain', href: '/products', badge: '12' },
-  { divider: true, label: 'Generate' },
-  { icon: Zap, label: 'Content Generator', href: '/generate' },
-  { icon: Megaphone, label: 'Campaign Generator', href: '/campaigns' },
-  { divider: true, label: 'Manage' },
-  { icon: Library, label: 'Content Library', href: '/library', badge: '38' },
-  { icon: Lightbulb, label: 'Learning Center', href: '/learning' },
-]
-
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
   const [usage, setUsage] = useState({ used: 0, limit: 20 })
   const [userName, setUserName] = useState('Workspace User')
   const [initials, setInitials] = useState('U')
+  const [counts, setCounts] = useState({ brands: 0, products: 0, library: 0 })
 
   useEffect(() => {
     let sub: any = null
@@ -46,12 +33,24 @@ export default function Sidebar() {
       const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
       if (roles?.[0]) {
         const wsId = roles[0].workspace_id
-        
-        // Fetch current usage
-        const { data: ws } = await supabase.from('workspaces').select('api_usage_usd, api_limit_usd').eq('id', wsId).single()
-        if (ws) {
-          setUsage({ used: ws.api_usage_usd || 0, limit: ws.api_limit_usd || 20 })
+
+        // Fetch usage + live counts in parallel
+        const [wsRes, brandsRes, productsRes, libraryRes] = await Promise.all([
+          supabase.from('workspaces').select('api_usage_usd, api_limit_usd').eq('id', wsId).single(),
+          supabase.from('brands').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+          supabase.from('products').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+          supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+        ])
+
+        if (wsRes.data) {
+          setUsage({ used: wsRes.data.api_usage_usd || 0, limit: wsRes.data.api_limit_usd || 20 })
         }
+
+        setCounts({
+          brands: brandsRes.count ?? 0,
+          products: productsRes.count ?? 0,
+          library: libraryRes.count ?? 0,
+        })
 
         // Subscribe to workspace updates
         sub = supabase.channel('ws-usage-updates')
@@ -78,8 +77,24 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    // Session state change listener in layout will redirect
   }
+
+  type NavItem =
+    | { divider: true; label: string }
+    | { icon: React.ElementType; label: string; href: string; badge?: number; active?: boolean }
+
+  const navItems: NavItem[] = [
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
+    { divider: true, label: 'Core' },
+    { icon: Brain, label: 'Brand Brain', href: '/brands', badge: counts.brands },
+    { icon: Package, label: 'Product Brain', href: '/products', badge: counts.products },
+    { divider: true, label: 'Generate' },
+    { icon: Zap, label: 'Content Generator', href: '/generate' },
+    { icon: Megaphone, label: 'Campaign Generator', href: '/campaigns' },
+    { divider: true, label: 'Manage' },
+    { icon: Library, label: 'Content Library', href: '/library', badge: counts.library },
+    { icon: Lightbulb, label: 'Learning Center', href: '/learning' },
+  ]
 
   return (
     <aside className="sidebar">
@@ -102,25 +117,23 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="sidebar-nav">
         {navItems.map((item, i) => {
-          if ('divider' in item && item.divider) {
-            return (
-              <div key={i} className="nav-section-label">{item.label}</div>
-            )
+          if ('divider' in item) {
+            return <div key={i} className="nav-section-label">{item.label}</div>
           }
-          const Icon = item.icon!
+          const navItem = item as { icon: React.ElementType; label: string; href: string; badge?: number; active?: boolean }
+          const Icon = navItem.icon
           return (
-            <a
-              key={i}
-              href={item.href}
-              className={`nav-item${item.active ? ' active' : ''}`}
-            >
+            <a key={i} href={navItem.href} className={`nav-item${navItem.active ? ' active' : ''}`}>
               <Icon />
-              <span>{item.label}</span>
-              {item.badge && <span className="badge">{item.badge}</span>}
+              <span>{navItem.label}</span>
+              {navItem.badge != null && navItem.badge > 0 && (
+                <span className="badge">{navItem.badge}</span>
+              )}
             </a>
           )
         })}
       </nav>
+
 
       {/* Claude API Usage */}
       <div style={{ padding: '0 16px 12px 16px' }}>

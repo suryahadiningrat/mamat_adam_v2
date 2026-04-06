@@ -19,6 +19,7 @@ const statusConfig: Record<Status, { label: string; cls: string; Icon: typeof Ch
 
 type OutputRecord = {
   id: string
+  content_title?: string
   copy_on_visual: string
   caption: string
   cta_options: string[]
@@ -60,7 +61,7 @@ export default function LibraryPage() {
     const { data, error } = await supabase
       .from('generation_outputs')
       .select(`
-        id, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, status, created_at,
+        id, content_title, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, status, created_at,
         request:generation_requests (
           platform,
           output_format,
@@ -408,7 +409,7 @@ export default function LibraryPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-1)' }}>
-                {['Copy On Visual', 'Brand', 'Platform', 'Status', 'Generated', ''].map(h => (
+                {['Content Title', 'Brand', 'Platform', 'Status', 'Generated', ''].map(h => (
                   <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -427,8 +428,19 @@ export default function LibraryPage() {
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-3)'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                     onClick={() => setMockupItem(item)}>
-                    <td style={{ padding: '12px 16px', maxWidth: 350 }}>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.copy_on_visual || (item.slides ? '[Carousel Format]' : item.scenes ? '[Video Format]' : '')}</div>
+                    <td style={{ padding: '12px 16px', maxWidth: 360 }}>
+                      {item.content_title ? (
+                        <>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{item.content_title}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {item.copy_on_visual || (item.slides ? `${item.slides.length} slides` : item.scenes ? `${item.scenes.length} scenes` : '')}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {item.copy_on_visual || (item.slides ? '[Carousel Format]' : item.scenes ? '[Video Format]' : '—')}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{item.request?.brand?.name || 'Unknown'}</div>
@@ -473,9 +485,20 @@ export default function LibraryPage() {
 
             {/* Header */}
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                {mockupItem.request?.platform}{mockupItem.request?.output_format ? ` · ${mockupItem.request.output_format}` : ''} Preview
-              </span>
+              <div>
+                {mockupItem.content_title ? (
+                  <>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{mockupItem.content_title}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      {mockupItem.request?.platform}{mockupItem.request?.output_format ? ` · ${mockupItem.request.output_format}` : ''} Preview
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {mockupItem.request?.platform}{mockupItem.request?.output_format ? ` · ${mockupItem.request.output_format}` : ''} Preview
+                  </span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => navigator.clipboard.writeText([mockupItem?.copy_on_visual, mockupItem?.caption, mockupItem?.cta_options?.[0], mockupItem?.hashtag_pack?.join(' ')].filter(Boolean).join('\n\n'))}
                   className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }}>

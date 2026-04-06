@@ -28,6 +28,7 @@ function getOutputSchema(outputFormat: string): string {
 
   if (fmt.includes('carousel')) {
     return `{
+  "content_title": "string — short internal title for this content piece (max 8 words, not shown publicly)",
   "slides": [
     {
       "slide_number": 1,
@@ -45,6 +46,7 @@ NOTE: Generate 5-7 slides. First slide = hook/attention, middle slides = value/p
 
   if (fmt.includes('reel') || fmt.includes('short') || fmt.includes('video') || fmt.includes('tiktok')) {
     return `{
+  "content_title": "string — short internal title for this content piece (max 8 words, not shown publicly)",
   "scenes": [
     {
       "scene_number": 1,
@@ -62,6 +64,7 @@ NOTE: Generate 4-6 scenes (15-60 seconds total). Scene 1 = hook (first 3 seconds
 
   if (fmt.includes('story')) {
     return `{
+  "content_title": "string — short internal title for this content piece (max 8 words, not shown publicly)",
   "copy_on_visual": "string — the main overlay text for the Story frame",
   "caption": "string — swipe-up/link text or sticker caption (keep very short)",
   "cta_options": ["string — Story CTA (e.g. Swipe Up, DM us, Link in bio)"],
@@ -73,6 +76,7 @@ NOTE: Generate 4-6 scenes (15-60 seconds total). Scene 1 = hook (first 3 seconds
 
   // Default: Single Image / Standard Post
   return `{
+  "content_title": "string — short internal title for this content piece (max 8 words, not shown publicly)",
   "copy_on_visual": "string — the headline/overlay text on the visual (max 12 words, bold & scroll-stopping)",
   "caption": "string — the full caption body following the copywriting framework",
   "cta_options": ["string", "string", "string"],

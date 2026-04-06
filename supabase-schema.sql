@@ -171,6 +171,7 @@ create table generation_outputs (
   id uuid primary key default uuid_generate_v4(),
   request_id uuid references generation_requests(id) on delete cascade,
   workspace_id uuid references workspaces(id),
+  content_title varchar(255),
   copy_on_visual text,
   caption text,
   slides jsonb,

@@ -4,7 +4,7 @@ import {
   Zap, ChevronDown, Sparkles, Copy, RefreshCw,
   CheckCircle2, Hash, Image, MessageSquare, ArrowRight,
   ToggleLeft, ToggleRight, Info, Brain, Package, Save,
-  Plus, Trash2, Film, Layers, Monitor
+  Plus, Trash2, Film, Layers, Monitor, type LucideIcon
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -90,6 +90,7 @@ type Slide = { slide_number: number; copy_on_visual: string; visual_direction: s
 type Scene = { scene_number: number; script: string; visual_direction: string }
 
 type GeneratedOutput = {
+  content_title?: string
   copy_on_visual?: string
   caption?: string
   cta_options?: string[]
@@ -100,6 +101,71 @@ type GeneratedOutput = {
   scenes?: Scene[]
 }
 
+// ─── Module-level sub-components (must be outside GeneratePage for Fast Refresh) ─
+function Select({ label, options, value, onChange, placeholder }: {
+  label: string; options: string[]; value: string;
+  onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.3px' }}>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <select value={value} onChange={e => onChange(e.target.value)}
+          style={{
+            width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13.5, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none', transition: 'border-color 0.15s'
+          }}
+          onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+          onBlur={e => e.target.style.borderColor = 'var(--border)'}>
+          <option value="">{placeholder || `Select ${label}`}</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+      </div>
+    </div>
+  )
+}
+
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)',
+        background: 'var(--surface-3)', cursor: 'pointer', fontSize: 11.5, color: copied ? 'var(--green)' : 'var(--text-secondary)',
+        transition: 'all 0.15s', fontFamily: 'var(--font-body)'
+      }}>
+      {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  )
+}
+
+function OutputSection({ icon: Icon, label, color, children, extra }: {
+  icon: LucideIcon;
+  label: string; color: string; children: React.ReactNode; extra?: React.ReactNode
+}) {
+  return (
+    <div style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Icon size={13} style={{ color }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+        </div>
+        {extra}
+      </div>
+      <div style={{ padding: '14px 16px' }}>{children}</div>
+    </div>
+  )
+}
+
+const cellStyle: React.CSSProperties = {
+  background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
+  padding: '7px 10px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)',
+  resize: 'vertical', outline: 'none', width: '100%', minHeight: 60, transition: 'border-color 0.15s', lineHeight: 1.5
+}
+
 export default function GeneratePage() {
   const [advancedMode, setAdvancedMode] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -107,6 +173,7 @@ export default function GeneratePage() {
   const [librarySaved, setLibrarySaved] = useState(false)
 
   const [output, setOutput] = useState<GeneratedOutput | null>(null)
+  const [editableTitle, setEditableTitle] = useState('')
   const [editableSlides, setEditableSlides] = useState<Slide[]>([])
   const [editableScenes, setEditableScenes] = useState<Scene[]>([])
   const [usage, setUsage] = useState<null | Record<string, number>>(null)
@@ -172,6 +239,7 @@ export default function GeneratePage() {
     if (!canGenerate || !selectedBrand) return
     setLoading(true)
     setOutput(null)
+    setEditableTitle('')
     setEditableSlides([])
     setEditableScenes([])
     setLibrarySaved(false)
@@ -233,6 +301,7 @@ export default function GeneratePage() {
       if (data.success) {
         setOutput(data.output)
         setUsage(data.usage)
+        setEditableTitle(data.output.content_title || '')
         if (data.output.slides) setEditableSlides(data.output.slides)
         if (data.output.scenes) setEditableScenes(data.output.scenes)
       } else {
@@ -273,6 +342,7 @@ export default function GeneratePage() {
       const { error: outErr } = await supabase.from('generation_outputs').insert({
         request_id: reqData.id,
         workspace_id: workspaceId,
+        content_title: editableTitle || output.content_title || null,
         copy_on_visual: output.copy_on_visual || null,
         caption: output.caption || null,
         slides: isCarousel ? editableSlides : null,
@@ -313,66 +383,6 @@ export default function GeneratePage() {
   }
   function removeScene(idx: number) {
     setEditableScenes(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, scene_number: i + 1 })))
-  }
-
-  // ─── UI Sub-components ────────────────────────────────────────────────────
-  function Select({ label, options, value, onChange, placeholder }: {
-    label: string; options: string[]; value: string;
-    onChange: (v: string) => void; placeholder?: string
-  }) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.3px' }}>{label}</label>
-        <div style={{ position: 'relative' }}>
-          <select value={value} onChange={e => onChange(e.target.value)}
-            style={{
-              width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13.5, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none', transition: 'border-color 0.15s'
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'}>
-            <option value="">{placeholder || `Select ${label}`}</option>
-            {options.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
-        </div>
-      </div>
-    )
-  }
-
-  function CopyBtn({ text }: { text: string }) {
-    const [copied, setCopied] = useState(false)
-    return (
-      <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)',
-          background: 'var(--surface-3)', cursor: 'pointer', fontSize: 11.5, color: copied ? 'var(--green)' : 'var(--text-secondary)',
-          transition: 'all 0.15s', fontFamily: 'var(--font-body)'
-        }}>
-        {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
-        {copied ? 'Copied!' : 'Copy'}
-      </button>
-    )
-  }
-
-  function OutputSection({ icon: Icon, label, color, children, extra }: {
-    icon: typeof Zap; label: string; color: string; children: React.ReactNode; extra?: React.ReactNode
-  }) {
-    return (
-      <div style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span></div>
-          {extra}
-        </div>
-        <div style={{ padding: '14px 16px' }}>{children}</div>
-      </div>
-    )
-  }
-
-  const cellStyle: React.CSSProperties = {
-    background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
-    padding: '7px 10px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)',
-    resize: 'vertical', outline: 'none', width: '100%', minHeight: 60, transition: 'border-color 0.15s', lineHeight: 1.5
   }
 
   return (
@@ -546,6 +556,24 @@ export default function GeneratePage() {
                 <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleSaveToLibrary} disabled={savingLibrary || librarySaved}>
                   {librarySaved ? <><CheckCircle2 size={12} /> Approved</> : <><CheckCircle2 size={12} /> Approve</>}
                 </button>
+              </div>
+
+              {/* Content Title */}
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface-3)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Content Title</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>Internal use only · not shown in caption or visual</span>
+                </div>
+                <input
+                  value={editableTitle}
+                  onChange={e => setEditableTitle(e.target.value)}
+                  placeholder="e.g. City Go Wet Road Safety – Instagram Reel Hook"
+                  style={{
+                    width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                    padding: '10px 14px', fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)',
+                    fontFamily: 'var(--font-body)', boxSizing: 'border-box'
+                  }}
+                />
               </div>
 
               {/* Context badge */}
