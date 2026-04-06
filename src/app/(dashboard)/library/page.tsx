@@ -25,10 +25,12 @@ type OutputRecord = {
   hashtag_pack: string[]
   slides?: any[]
   scenes?: any[]
+  visual_direction?: string
   status: Status
   created_at: string
   request: {
     platform: Platform
+    output_format?: string
     brand: { name: string }
     product: { name: string }
   }
@@ -58,9 +60,10 @@ export default function LibraryPage() {
     const { data, error } = await supabase
       .from('generation_outputs')
       .select(`
-        id, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, status, created_at,
+        id, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, status, created_at,
         request:generation_requests (
           platform,
+          output_format,
           brand:brands(name),
           product:products(name)
         )
@@ -106,39 +109,119 @@ export default function LibraryPage() {
 
   // ─── Platform Mockups ─────────────────────────────────────────────────────
 
+  // ─── Format-aware content panel (shown in all mockups below the platform visual) ───
+  function ContentPanel({ item }: { item: OutputRecord }) {
+    const hasSlides = item.slides && item.slides.length > 0
+    const hasScenes = item.scenes && item.scenes.length > 0
+    const tableHead = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }
+    const tableCell = { padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, verticalAlign: 'top' as const, borderBottom: '1px solid var(--border)' }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+        {hasSlides && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', background: 'rgba(124,109,250,0.08)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🎠 Carousel — {item.slides!.length} Slides
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={tableHead}>#</th><th style={tableHead}>Copy On Visual</th><th style={tableHead}>Visual Direction</th></tr>
+              </thead>
+              <tbody>
+                {item.slides!.map((s: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{ ...tableCell, width: 32, textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{s.slide_number}</td>
+                    <td style={tableCell}>{s.copy_on_visual}</td>
+                    <td style={{ ...tableCell, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{s.visual_direction}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {hasScenes && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', background: 'rgba(248,113,113,0.08)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🎬 Video Script — {item.scenes!.length} Scenes
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={tableHead}>Scene</th><th style={tableHead}>Script / Dialogue</th><th style={tableHead}>Visual Direction</th></tr>
+              </thead>
+              <tbody>
+                {item.scenes!.map((s: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{ ...tableCell, width: 50, textAlign: 'center', fontWeight: 700, color: 'var(--red)' }}>{s.scene_number}</td>
+                    <td style={tableCell}>{s.script}</td>
+                    <td style={{ ...tableCell, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{s.visual_direction}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!hasSlides && !hasScenes && item.copy_on_visual && (
+          <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Copy On Visual</div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>{item.copy_on_visual}</p>
+          </div>
+        )}
+        {item.caption && (
+          <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Caption</div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap' }}>{item.caption}</p>
+          </div>
+        )}
+        {item.cta_options?.[0] && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>CTA:</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{item.cta_options[0]}</span>
+          </div>
+        )}
+        {item.hashtag_pack && item.hashtag_pack.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {item.hashtag_pack.map((tag: string, i: number) => (
+              <span key={i} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 20, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'var(--amber)' }}>{tag}</span>
+            ))}
+          </div>
+        )}
+        {item.visual_direction && (
+          <div style={{ padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Visual Direction: </span>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{item.visual_direction}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   function InstagramMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'F'
     return (
-      <div style={{ width: '100%', maxWidth: 360, background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-        <div style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #efefef' }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e1306c', fontSize: 12, fontWeight: 700 }}>{initial}</div>
+      <div style={{ width: '100%' }}>
+        <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginBottom: 12 }}>
+          <div style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #efefef' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e1306c', fontSize: 12, fontWeight: 700 }}>{initial}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>{handle}</div>
+              <div style={{ fontSize: 11, color: '#8e8e8e' }}>Sponsored</div>
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>{handle}</div>
-            <div style={{ fontSize: 11, color: '#8e8e8e' }}>Sponsored</div>
+          <div style={{ width: '100%', aspectRatio: '1/1', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Image size={32} color="#c0c0c0" />
           </div>
-        </div>
-        <div style={{ width: '100%', aspectRatio: '1/1', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Image size={32} color="#c0c0c0" />
-        </div>
-        <div style={{ padding: '10px 14px 4px', display: 'flex', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: 14 }}>
-            <Heart size={22} color="#262626" /><MessageCircle size={22} color="#262626" /><Send size={22} color="#262626" />
+          <div style={{ padding: '10px 14px 4px', display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 14 }}><Heart size={22} color="#262626" /><MessageCircle size={22} color="#262626" /><Send size={22} color="#262626" /></div>
+            <Bookmark size={22} color="#262626" />
           </div>
-          <Bookmark size={22} color="#262626" />
-        </div>
-        <div style={{ padding: '0 14px 14px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 4 }}>1,432 likes</div>
-          <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.45 }}>
-            <span style={{ fontWeight: 600, marginRight: 6 }}>{handle}</span>
-            {item.copy_on_visual}<br /><br />
-            {item.caption}<br /><br />
-            <span style={{ fontWeight: 600 }}>{item.cta_options?.[0]}</span><br /><br />
-            <span style={{ color: '#00376b' }}>{item.hashtag_pack?.join(' ')}</span>
+          <div style={{ padding: '4px 14px 14px', fontSize: 13, color: '#262626' }}>
+            <span style={{ fontWeight: 600 }}>1,432 likes</span>
           </div>
         </div>
+        <ContentPanel item={item} />
       </div>
     )
   }
@@ -147,29 +230,26 @@ export default function LibraryPage() {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'B'
     return (
-      <div style={{ width: '100%', maxWidth: 380, background: '#000', borderRadius: 12, border: '1px solid #2f3336', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', display: 'flex', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'white', fontSize: 16 }}>{initial}</div>
-          <div style={{ width: '100%' }}>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#e7e9ea' }}>{item.request?.brand?.name || 'Brand'}</span>
-              <CheckCircle2 size={14} color="#1d9bf0" fill="#1d9bf0" stroke="black" />
-              <span style={{ color: '#71767b', fontSize: 13 }}>@{handle}</span>
-            </div>
-            <div style={{ fontSize: 14, color: '#e7e9ea', lineHeight: 1.5, marginTop: 6, whiteSpace: 'pre-wrap' }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>{item.copy_on_visual}</span>
-              {'\n\n'}{item.caption}{'\n\n'}
-              {item.cta_options?.[0]}{'\n\n'}
-              <span style={{ color: '#1d9bf0' }}>{item.hashtag_pack?.join(' ')}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#71767b', marginTop: 14, paddingRight: 20 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><MessageCircle size={15} /> 42</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Repeat2 size={15} /> 14</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Heart size={15} /> 402</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><BarChart2 size={15} /> 12k</span>
+      <div style={{ width: '100%' }}>
+        <div style={{ background: '#000', borderRadius: 12, border: '1px solid #2f3336', overflow: 'hidden', marginBottom: 12 }}>
+          <div style={{ padding: '12px 16px', display: 'flex', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'white', fontSize: 16 }}>{initial}</div>
+            <div style={{ width: '100%' }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#e7e9ea' }}>{item.request?.brand?.name || 'Brand'}</span>
+                <CheckCircle2 size={14} color="#1d9bf0" fill="#1d9bf0" stroke="black" />
+                <span style={{ color: '#71767b', fontSize: 13 }}>@{handle}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#71767b', marginTop: 14, paddingRight: 20 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><MessageCircle size={15} /> 42</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Repeat2 size={15} /> 14</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Heart size={15} /> 402</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><BarChart2 size={15} /> 12k</span>
+              </div>
             </div>
           </div>
         </div>
+        <ContentPanel item={item} />
       </div>
     )
   }
@@ -177,30 +257,27 @@ export default function LibraryPage() {
   function TikTokMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
     return (
-      <div style={{ width: '100%', maxWidth: 300, background: '#000', borderRadius: 12, overflow: 'hidden', position: 'relative', minHeight: 420 }}>
-        {/* Video area */}
-        <div style={{ width: '100%', aspectRatio: '9/16', background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', padding: 16 }}>
-          <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)' }}>
-            <Play size={48} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
-          </div>
-          {/* Right actions */}
-          <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
-            {[{ Icon: Heart, label: '12.4K' }, { Icon: MessageCircle, label: '842' }, { Icon: Bookmark, label: '3.2K' }, { Icon: Share2, label: 'Share' }].map(({ Icon, label }) => (
-              <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                <Icon size={26} color="white" />
-                <span style={{ fontSize: 10, color: 'white', fontWeight: 600 }}>{label}</span>
-              </div>
-            ))}
-          </div>
-          {/* Bottom overlay */}
-          <div style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '20px 0 0' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 6 }}>@{handle}</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {item.copy_on_visual} {item.caption}
+      <div style={{ width: '100%' }}>
+        <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden', position: 'relative', marginBottom: 12 }}>
+          <div style={{ width: '100%', aspectRatio: '9/16', maxHeight: 280, background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', padding: 16 }}>
+            <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)' }}>
+              <Play size={40} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: '#ee1d52' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
+            <div style={{ position: 'absolute', right: 12, bottom: 60, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
+              {[{ Icon: Heart, label: '12.4K' }, { Icon: MessageCircle, label: '842' }, { Icon: Share2, label: 'Share' }].map(({ Icon, label }) => (
+                <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <Icon size={22} color="white" />
+                  <span style={{ fontSize: 9, color: 'white', fontWeight: 600 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '20px 0 0' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginBottom: 4 }}>@{handle}</div>
+              <div style={{ fontSize: 11, color: '#ee1d52' }}>{item.hashtag_pack?.slice(0, 3).join(' ')}</div>
+            </div>
           </div>
         </div>
+        <ContentPanel item={item} />
       </div>
     )
   }
@@ -209,38 +286,29 @@ export default function LibraryPage() {
     const handle = item.request?.brand?.name || 'Brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'B'
     return (
-      <div style={{ width: '100%', maxWidth: 400, background: '#0f0f0f', borderRadius: 8, overflow: 'hidden' }}>
-        {/* Thumbnail */}
-        <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Play size={20} color="white" fill="white" />
-          </div>
-          <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.8)', color: 'white', fontSize: 11, fontWeight: 600, padding: '2px 5px', borderRadius: 4 }}>1:32</div>
-        </div>
-        {/* Info */}
-        <div style={{ padding: '10px 12px', display: 'flex', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ff0000', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>{initial}</div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f1f1', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.copy_on_visual}</div>
-            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{handle} · 12K views · 3 days ago</div>
-          </div>
-        </div>
-        {/* Description */}
-        <div style={{ padding: '0 12px 12px', background: '#161616', borderRadius: 8, margin: '0 12px 12px', fontSize: 12.5, color: '#aaa', lineHeight: 1.5 }}>
-          <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.caption}
-          </div>
-          <div style={{ marginTop: 6, color: '#3ea6ff', fontSize: 12 }}>{item.cta_options?.[0]}</div>
-          <div style={{ marginTop: 4, color: '#3ea6ff', fontSize: 11 }}>{item.hashtag_pack?.slice(0, 3).join(' ')}</div>
-        </div>
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 0, borderTop: '1px solid #272727', padding: '0 12px' }}>
-          {[{ Icon: ThumbsUp, label: '4.2K' }, { Icon: Share2, label: 'Share' }, { Icon: Bookmark, label: 'Save' }].map(({ Icon, label }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 12px', fontSize: 12, color: '#aaa', cursor: 'pointer' }}>
-              <Icon size={16} /> {label}
+      <div style={{ width: '100%' }}>
+        <div style={{ background: '#0f0f0f', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+          <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Play size={20} color="white" fill="white" />
             </div>
-          ))}
+            <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.8)', color: 'white', fontSize: 11, fontWeight: 600, padding: '2px 5px', borderRadius: 4 }}>1:32</div>
+          </div>
+          <div style={{ padding: '10px 12px', display: 'flex', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ff0000', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>{initial}</div>
+            <div>
+              <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{handle} · 12K views · 3 days ago</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 0, borderTop: '1px solid #272727', padding: '0 12px' }}>
+            {[{ Icon: ThumbsUp, label: '4.2K' }, { Icon: Share2, label: 'Share' }, { Icon: Bookmark, label: 'Save' }].map(({ Icon, label }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', fontSize: 12, color: '#aaa', cursor: 'pointer' }}>
+                <Icon size={14} /> {label}
+              </div>
+            ))}
+          </div>
         </div>
+        <ContentPanel item={item} />
       </div>
     )
   }
@@ -249,51 +317,42 @@ export default function LibraryPage() {
     const brandName = item.request?.brand?.name || 'Brand'
     const initial = brandName.charAt(0)
     return (
-      <div style={{ width: '100%', maxWidth: 400, background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-        <div style={{ padding: '12px 16px', display: 'flex', gap: 10, borderBottom: '1px solid #e0e0e0' }}>
-          <div style={{ width: 48, height: 48, borderRadius: 4, background: '#0a66c2', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 20 }}>{initial}</div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#000' }}>{brandName}</div>
-            <div style={{ fontSize: 12, color: '#666' }}>Company Page · Promoted</div>
-            <div style={{ fontSize: 11, color: '#999' }}>🌐 2,847 followers</div>
-          </div>
-        </div>
-        <div style={{ padding: '14px 16px', background: 'white' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#000', marginBottom: 8 }}>{item.copy_on_visual}</div>
-          <div style={{ fontSize: 14, color: '#333', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.caption}
-          </div>
-          <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, color: '#0a66c2' }}>{item.cta_options?.[0]}</div>
-          <div style={{ marginTop: 8, fontSize: 12, color: '#0a66c2' }}>{item.hashtag_pack?.slice(0, 4).join(' ')}</div>
-        </div>
-        {/* Engagement bar */}
-        <div style={{ padding: '8px 16px', borderTop: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
-          <span>👍 ❤️ 💡  <span style={{ color: '#444' }}>247</span></span>
-          <span>32 comments · 18 reposts</span>
-        </div>
-        <div style={{ display: 'flex', borderTop: '1px solid #e0e0e0' }}>
-          {['Like', 'Comment', 'Repost', 'Send'].map(a => (
-            <div key={a} style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <ThumbsUp size={14} /> {a}
+      <div style={{ width: '100%' }}>
+        <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', marginBottom: 12 }}>
+          <div style={{ padding: '12px 16px', display: 'flex', gap: 10, borderBottom: '1px solid #e0e0e0' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 4, background: '#0a66c2', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 20 }}>{initial}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#000' }}>{brandName}</div>
+              <div style={{ fontSize: 12, color: '#666' }}>Company Page · Promoted</div>
             </div>
-          ))}
+          </div>
+          <div style={{ padding: '8px 16px', borderTop: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
+            <span>👍 ❤️ 💡 <span style={{ color: '#444' }}>247</span></span>
+            <span>32 comments</span>
+          </div>
+          <div style={{ display: 'flex', borderTop: '1px solid #e0e0e0' }}>
+            {['Like', 'Comment', 'Repost', 'Send'].map(a => (
+              <div key={a} style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <ThumbsUp size={13} /> {a}
+              </div>
+            ))}
+          </div>
         </div>
+        <ContentPanel item={item} />
       </div>
     )
   }
 
   function GenericMockup({ item }: { item: OutputRecord }) {
     const platform = item.request?.platform
+    const fmt = item.request?.output_format
     return (
-      <div style={{ width: '100%', maxWidth: 400, background: 'var(--surface-1)', borderRadius: 12, border: '1px solid var(--border)', padding: 20 }}>
-        <div style={{ display: 'inline-block', padding: '4px 10px', background: `${platformColors[platform] || '#888'}18`, color: platformColors[platform] || '#888', borderRadius: 20, fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
-          {platform}
+      <div style={{ width: '100%' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'inline-block', padding: '4px 10px', background: `${platformColors[platform] || '#888'}18`, color: platformColors[platform] || '#888', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{platform}</div>
+          {fmt && <div style={{ display: 'inline-block', padding: '4px 10px', background: 'rgba(124,109,250,0.1)', color: 'var(--accent)', borderRadius: 20, fontSize: 12, fontWeight: 600, border: '1px solid var(--border-accent)' }}>{fmt}</div>}
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>{item.copy_on_visual}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.caption}</div>
-        <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 12 }}>{item.cta_options?.[0]}</div>
-        <div style={{ fontSize: 13, color: 'var(--green)' }}>{item.hashtag_pack?.join(' ')}</div>
+        <ContentPanel item={item} />
       </div>
     )
   }
@@ -406,15 +465,16 @@ export default function LibraryPage() {
         }} onClick={() => setMockupItem(null)}>
 
           <div style={{
-            background: 'var(--surface-1)', width: '100%', maxWidth: 480,
+            background: 'var(--surface-1)', width: '100%', maxWidth: 580,
             borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid var(--border)'
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid var(--border)',
+            maxHeight: '90vh'
           }} onClick={e => e.stopPropagation()}>
 
             {/* Header */}
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                {mockupItem.request?.platform} Preview
+                {mockupItem.request?.platform}{mockupItem.request?.output_format ? ` · ${mockupItem.request.output_format}` : ''} Preview
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => navigator.clipboard.writeText([mockupItem?.copy_on_visual, mockupItem?.caption, mockupItem?.cta_options?.[0], mockupItem?.hashtag_pack?.join(' ')].filter(Boolean).join('\n\n'))}
@@ -428,7 +488,7 @@ export default function LibraryPage() {
             </div>
 
             {/* Mockup Canvas */}
-            <div style={{ padding: 20, background: 'var(--surface-3)', display: 'flex', justifyContent: 'center', minHeight: 300, maxHeight: '60vh', overflowY: 'auto' }}>
+            <div style={{ padding: 20, background: 'var(--surface-3)', overflowY: 'auto', flex: 1 }}>
               {renderMockup(mockupItem)}
             </div>
 
