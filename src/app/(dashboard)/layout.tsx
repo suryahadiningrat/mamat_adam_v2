@@ -7,6 +7,13 @@ import Topbar from '@/components/Topbar'
 import { supabase } from '@/lib/supabase'
 
 async function ensureWorkspace(userId: string, email: string) {
+  // Always ensure profile has email stored (needed for invite matching)
+  await supabase.from('user_profiles').upsert({
+    id: userId,
+    full_name: email.split('@')[0],
+    email: email
+  }, { onConflict: 'id', ignoreDuplicates: false })
+
   // Check if user already has a workspace role
   const { data: roles } = await supabase
     .from('user_workspace_roles')
@@ -16,7 +23,30 @@ async function ensureWorkspace(userId: string, email: string) {
 
   if (roles && roles.length > 0) return // already set up
 
-  // Create workspace
+  // Check for a pending invitation to an existing workspace
+  const { data: invite } = await supabase
+    .from('workspace_invitations')
+    .select('id, workspace_id, role')
+    .eq('invited_email', email)
+    .eq('status', 'pending')
+    .limit(1)
+    .single()
+
+  if (invite) {
+    // Join the invited workspace instead of creating a new one
+    await supabase.from('user_workspace_roles').insert({
+      workspace_id: invite.workspace_id,
+      user_id: userId,
+      role: invite.role
+    })
+    await supabase.from('workspace_invitations').update({
+      status: 'accepted',
+      accepted_at: new Date().toISOString()
+    }).eq('id', invite.id)
+    return
+  }
+
+  // No invitation — create a brand new workspace for this user
   const name = email.split('@')[0]
   const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000)
 
@@ -28,17 +58,10 @@ async function ensureWorkspace(userId: string, email: string) {
 
   if (wsErr || !ws) return
 
-  // Create workspace role
   await supabase.from('user_workspace_roles').insert({
     workspace_id: ws.id,
     user_id: userId,
     role: 'admin'
-  })
-
-  // Create user profile if missing
-  await supabase.from('user_profiles').upsert({
-    id: userId,
-    full_name: name
   })
 }
 

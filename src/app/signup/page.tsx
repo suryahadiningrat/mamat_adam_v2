@@ -24,16 +24,21 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          data: {
-            full_name: name,
-          }
+          data: { full_name: name },
+          emailRedirectTo: `${window.location.origin}/`
         }
       })
 
-      if (error) {
-        throw error
+      if (error) throw error
+
+      // If email confirmation is disabled in Supabase, the user is auto-confirmed
+      // and has an active session — redirect straight to the dashboard
+      if (data.session) {
+        router.push('/')
+        return
       }
 
+      // Otherwise show "check your email" screen
       setSuccess(true)
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up.')
@@ -96,8 +101,11 @@ export default function SignupPage() {
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '12px' }}>
               Check your email
             </h2>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '24px' }}>
-              We've sent a verification link to <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>. Please click the link to verify your account and sign in.
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '8px' }}>
+              We've sent a verification link to <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>.
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: '24px' }}>
+              Click the link in the email to verify your account. Check your spam folder if you don't see it within a few minutes.
             </p>
             <button
               onClick={() => router.push('/login')}

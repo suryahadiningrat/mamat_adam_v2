@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   LayoutDashboard, Brain, Package, Zap, Megaphone,
-  Library, Lightbulb, Settings, ChevronDown, LogOut, Layers, BookOpen
+  Library, Lightbulb, Settings, ChevronDown, LogOut, Layers, BookOpen, Crown
 } from 'lucide-react'
 
 export default function Sidebar() {
@@ -11,6 +11,7 @@ export default function Sidebar() {
   const [userName, setUserName] = useState('Workspace User')
   const [initials, setInitials] = useState('U')
   const [counts, setCounts] = useState({ brands: 0, products: 0, library: 0, topics: 0 })
+  const [isSuperadmin, setIsSuperadmin] = useState(false)
 
   useEffect(() => {
     let sub: any = null
@@ -33,6 +34,11 @@ export default function Sidebar() {
       const { data: roles } = await supabase.from('user_workspace_roles').select('workspace_id').eq('user_id', user.id).limit(1)
       if (roles?.[0]) {
         const wsId = roles[0].workspace_id
+
+        // Check superadmin status
+        const { data: profData } = await supabase.from('user_profiles')
+          .select('is_superadmin').eq('id', user.id).single()
+        if (profData?.is_superadmin) setIsSuperadmin(true)
 
         // Fetch usage + live counts in parallel
         const [wsRes, brandsRes, productsRes, libraryRes, topicsRes] = await Promise.all([
@@ -97,6 +103,10 @@ export default function Sidebar() {
     { divider: true, label: 'Manage' },
     { icon: BookOpen, label: 'Topic Library', href: '/topic-library', badge: counts.topics },
     { icon: Library, label: 'Content Library', href: '/library', badge: counts.library },
+    ...(isSuperadmin ? [
+      { divider: true, label: 'Admin' } as const,
+      { icon: Crown, label: 'Admin Panel', href: '/admin' } as const,
+    ] : []),
     { icon: Lightbulb, label: 'Learning Center', href: '/learning' },
   ]
 
