@@ -166,11 +166,27 @@ const cellStyle: React.CSSProperties = {
   resize: 'vertical', outline: 'none', width: '100%', minHeight: 60, transition: 'border-color 0.15s', lineHeight: 1.5
 }
 
+// Map a topic-generator format string to the exact label used in platformFormats
+function matchFormat(fmt: string, platform: string): string {
+  const formats = platformFormats[platform] || []
+  if (!fmt || !formats.length) return formats[0]?.label || ''
+  const fl = fmt.toLowerCase()
+  const exact = formats.find(f => f.label.toLowerCase() === fl)
+  if (exact) return exact.label
+  const contains = formats.find(f => f.label.toLowerCase().includes(fl) || fl.includes(f.label.toLowerCase()))
+  if (contains) return contains.label
+  if (fl.includes('carousel')) return formats.find(f => f.isCarousel)?.label || ''
+  if (fl.includes('reel') || fl.includes('short') || fl.includes('video')) return formats.find(f => f.isVideo)?.label || ''
+  if (fl.includes('story')) return formats.find(f => f.label.toLowerCase().includes('story'))?.label || ''
+  return formats[0]?.label || ''
+}
+
 export default function GeneratePage() {
   const [advancedMode, setAdvancedMode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [savingLibrary, setSavingLibrary] = useState(false)
   const [librarySaved, setLibrarySaved] = useState(false)
+  const [topicRef, setTopicRef] = useState<{ title: string; pillar: string; format: string } | null>(null)
 
   const [output, setOutput] = useState<GeneratedOutput | null>(null)
   const [editableTitle, setEditableTitle] = useState('')
@@ -209,6 +225,41 @@ export default function GeneratePage() {
     }
     initData()
   }, [])
+
+  // Apply URL params (from Topic Generator / Topic Library) after data loads
+  useEffect(() => {
+    if (!brands.length) return
+    const params = new URLSearchParams(window.location.search)
+    const topicParam     = params.get('topic')
+    const formatParam    = params.get('format')
+    const pillarParam    = params.get('pillar')
+    const platformParam  = params.get('platform')
+    const brandIdParam   = params.get('brandId')
+    const productIdParam = params.get('productId')
+    const objectiveParam = params.get('objective')
+
+    if (!topicParam && !brandIdParam) return
+
+    const resolvedBrand = brandIdParam ? brands.find(b => b.id === brandIdParam) : undefined
+    const resolvedPlatform = platformParam || ''
+    const resolvedFormat = formatParam && resolvedPlatform ? matchFormat(formatParam, resolvedPlatform) : ''
+
+    if (topicParam) {
+      setTopicRef({ title: topicParam, pillar: pillarParam || '', format: formatParam || '' })
+    }
+
+    setForm(f => ({
+      ...f,
+      ...(resolvedBrand ? { brandId: resolvedBrand.id } : {}),
+      ...(productIdParam ? { productId: productIdParam } : {}),
+      ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
+      ...(resolvedFormat ? { outputFormat: resolvedFormat } : {}),
+      ...(objectiveParam ? { objective: objectiveParam } : {}),
+      additionalContext: topicParam
+        ? `Topic reference: "${topicParam}"${pillarParam ? ` — Pillar: ${pillarParam}` : ''}. Generate content specifically for this topic.`
+        : f.additionalContext
+    }))
+  }, [brands])
 
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -401,6 +452,22 @@ export default function GeneratePage() {
           </button>
         </div>
       </div>
+
+      {/* ─── Topic Reference Banner ──────────────────────────────────────── */}
+      {topicRef && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 16px', background: 'rgba(124,109,250,0.07)', border: '1px solid var(--border-accent)', borderRadius: 10, marginBottom: 4, fontSize: 13 }}>
+          <Layers size={14} style={{ color: 'var(--accent)', marginTop: 1, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>From Topic Generator</span>
+            <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: 2, lineHeight: 1.4 }}>{topicRef.title}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+              {topicRef.pillar && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(124,109,250,0.12)', border: '1px solid rgba(124,109,250,0.3)', color: 'var(--accent)' }}>{topicRef.pillar}</span>}
+              {topicRef.format && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{topicRef.format}</span>}
+            </div>
+          </div>
+          <button onClick={() => setTopicRef(null)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2, lineHeight: 1, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: output ? '380px 1fr' : '480px 1fr', gap: 16, alignItems: 'start' }}>
         {/* ─── Left Panel ─────────────────────────────────────────────────── */}

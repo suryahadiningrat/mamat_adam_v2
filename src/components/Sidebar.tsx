@@ -3,14 +3,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   LayoutDashboard, Brain, Package, Zap, Megaphone,
-  Library, Lightbulb, Settings, ChevronDown, LogOut
+  Library, Lightbulb, Settings, ChevronDown, LogOut, Layers, BookOpen
 } from 'lucide-react'
 
 export default function Sidebar() {
   const [usage, setUsage] = useState({ used: 0, limit: 20 })
   const [userName, setUserName] = useState('Workspace User')
   const [initials, setInitials] = useState('U')
-  const [counts, setCounts] = useState({ brands: 0, products: 0, library: 0 })
+  const [counts, setCounts] = useState({ brands: 0, products: 0, library: 0, topics: 0 })
 
   useEffect(() => {
     let sub: any = null
@@ -35,11 +35,12 @@ export default function Sidebar() {
         const wsId = roles[0].workspace_id
 
         // Fetch usage + live counts in parallel
-        const [wsRes, brandsRes, productsRes, libraryRes] = await Promise.all([
+        const [wsRes, brandsRes, productsRes, libraryRes, topicsRes] = await Promise.all([
           supabase.from('workspaces').select('api_usage_usd, api_limit_usd').eq('id', wsId).single(),
           supabase.from('brands').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
           supabase.from('products').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
           supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
+          supabase.from('content_topics').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
         ])
 
         if (wsRes.data) {
@@ -50,6 +51,7 @@ export default function Sidebar() {
           brands: brandsRes.count ?? 0,
           products: productsRes.count ?? 0,
           library: libraryRes.count ?? 0,
+          topics: topicsRes.count ?? 0,
         })
 
         // Subscribe to workspace updates
@@ -89,9 +91,11 @@ export default function Sidebar() {
     { icon: Brain, label: 'Brand Brain', href: '/brands', badge: counts.brands },
     { icon: Package, label: 'Product Brain', href: '/products', badge: counts.products },
     { divider: true, label: 'Generate' },
+    { icon: Layers, label: 'Topic Generator', href: '/topics' },
     { icon: Zap, label: 'Content Generator', href: '/generate' },
     { icon: Megaphone, label: 'Campaign Generator', href: '/campaigns' },
     { divider: true, label: 'Manage' },
+    { icon: BookOpen, label: 'Topic Library', href: '/topic-library', badge: counts.topics },
     { icon: Library, label: 'Content Library', href: '/library', badge: counts.library },
     { icon: Lightbulb, label: 'Learning Center', href: '/learning' },
   ]
