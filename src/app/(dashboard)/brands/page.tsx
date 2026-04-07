@@ -395,7 +395,7 @@ export default function BrandsPage() {
                   ].map(({ label, val }) => (
                     <div key={label}>
                       <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: 12, color: val ? 'var(--text-primary)' : 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</div>
+                      <div style={{ fontSize: 12, color: val ? 'var(--text-primary)' : 'var(--text-tertiary)', wordBreak: 'break-word', lineHeight: 1.4 }}>{val || '—'}</div>
                     </div>
                   ))}
                 </div>

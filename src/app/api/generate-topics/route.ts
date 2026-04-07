@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { copywritingSkill, socialContentSkill } from '@/lib/skills'
 
 export async function POST(req: NextRequest) {
   try {
@@ -75,6 +76,18 @@ Rules:
 - Make titles feel native to ${platform || 'social media'} (${language} market context)
 - Each title should clearly communicate what the post is about
 - Vary the angle: educational, product feature, lifestyle, testimonial/proof, behind-the-scenes, trend-based
+
+=== EXPERT MARKETING GUIDELINES ===
+Follow the principles in these guidelines when conceptualizing the topic angles:
+
+<copywriting_skill>
+${copywritingSkill}
+</copywriting_skill>
+
+<social_content_skill>
+${socialContentSkill}
+</social_content_skill>
+===================================
 
 Return ONLY valid JSON — no markdown, no explanation:
 {

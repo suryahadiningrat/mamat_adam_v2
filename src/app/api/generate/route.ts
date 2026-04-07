@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { copywritingSkill, socialContentSkill } from '@/lib/skills'
+
 
 // FCE Base System Prompt — keep this static so it gets cached by Anthropic
 const FCE_SYSTEM_PROMPT = `You are FCE — Floothink Content Engine. You are a senior brand strategist and copywriter with deep expertise in social media content for Indonesian and Southeast Asian markets.
@@ -18,6 +20,18 @@ You never:
 - Use words from the vocabulary blacklist
 - Generate content that contradicts brand values
 - Write generic, un-branded copy
+
+=== EXPERT MARKETING GUIDELINES ===
+The following are mandatory frameworks and best practices you must follow when writing copy and structuring content:
+
+<copywriting_skill>
+${copywritingSkill}
+</copywriting_skill>
+
+<social_content_skill>
+${socialContentSkill}
+</social_content_skill>
+===================================
 
 Output format: ONLY valid JSON, no markdown, no explanation outside the JSON.`
 

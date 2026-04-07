@@ -645,7 +645,8 @@ export default function GeneratePage() {
                 <span style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   <strong style={{ color: 'var(--accent)' }}>Brand tone:</strong> {toneVoice} &nbsp;·&nbsp;
                   <strong style={{ color: 'var(--green)' }}>USP:</strong> {brainUSP} &nbsp;·&nbsp;
-                  <strong style={{ color: 'var(--text-secondary)' }}>Framework:</strong> {form.framework || 'PAS'}
+                  <strong style={{ color: 'var(--text-secondary)' }}>Framework:</strong> {form.framework || 'PAS'} &nbsp;·&nbsp;
+                  <strong style={{ color: 'var(--accent)' }}><Sparkles size={11} style={{ display: 'inline', marginBottom: -2 }} /> Marketing Skills:</strong> Active (Copywriting, Social Content)
                 </span>
               </div>
 
