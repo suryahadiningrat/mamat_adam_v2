@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
-import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud } from 'lucide-react'
+import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud, Sparkles } from 'lucide-react'
 
 type Brand = {
   id: string
@@ -56,6 +56,48 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [scraping, setScraping] = useState(false)
+  const [scrapeError, setScrapeError] = useState('')
+  const [productSources, setProductSources] = useState('')
+
+  async function handleScrape() {
+    if (!productSources) return
+    setScraping(true)
+    setScrapeError('')
+    try {
+      const urls = productSources.split(/[\s,]+/).filter((u: string) => u.trim() && u.includes('.'))
+      const res = await fetch('/api/scrape-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls })
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setScrapeError(json.error || 'Scrape failed')
+      } else {
+        const d = json.data
+        setFormData(f => ({
+          ...f,
+          name: d.name || f.name,
+          product_type: d.product_type || f.product_type,
+          summary: d.summary || f.summary,
+          usp: d.usp || f.usp,
+          rtb: d.rtb || f.rtb,
+          functional_benefits: Array.isArray(d.functional_benefits)
+            ? JSON.stringify(d.functional_benefits)
+            : d.functional_benefits || f.functional_benefits,
+          emotional_benefits: Array.isArray(d.emotional_benefits)
+            ? JSON.stringify(d.emotional_benefits)
+            : d.emotional_benefits || f.emotional_benefits,
+          target_audience: d.target_audience || f.target_audience,
+          price_tier: d.price_tier || f.price_tier,
+        }))
+      }
+    } catch {
+      setScrapeError('Network error')
+    }
+    setScraping(false)
+  }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -130,6 +172,8 @@ export default function ProductsPage() {
 
   const handleOpenModal = (product?: Product) => {
     setErrorMsg('')
+    setScrapeError('')
+    setProductSources('')
     if (product) {
       setEditingProduct(product)
       setFormData({
@@ -454,9 +498,42 @@ export default function ProductsPage() {
               </div>
 
               <div style={{ height: 1, background: 'var(--border)', margin: '8px 0' }} />
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Brain size={16} style={{ color: '#3b82f6' }}/> Product Brain
-              </h3>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <Brain size={16} style={{ color: '#3b82f6' }}/> Product Brain
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+                  Enter product page or social media URLs to auto-fill the fields below with AI.
+                </p>
+                <div className="form-group">
+                  <label className="form-label">Product Sources</label>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <textarea
+                      className="form-input"
+                      style={{ flex: 1, resize: 'vertical' }}
+                      rows={2}
+                      value={productSources}
+                      onChange={e => setProductSources(e.target.value)}
+                      placeholder={'https://brand.com/product\nhttps://instagram.com/brand'}
+                    />
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleScrape}
+                      disabled={!productSources || scraping}
+                      style={{ whiteSpace: 'nowrap', flexShrink: 0, height: 'fit-content' }}
+                    >
+                      {scraping
+                        ? <><div className="loading-spinner" style={{ width: 13, height: 13 }} /> Scanning…</>
+                        : <><Sparkles size={13} /> Auto-fill AI</>}
+                    </button>
+                  </div>
+                  {scrapeError && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <AlertCircle size={12} /> {scrapeError}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="form-group">
                 <label className="form-label">Unique Selling Proposition (USP)</label>
