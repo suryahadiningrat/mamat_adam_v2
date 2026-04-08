@@ -347,8 +347,8 @@ export default function TopicsPage() {
             </div>
           </div>
 
-          <button className="btn btn-primary" onClick={handleGenerate} disabled={!canGenerate || loading}
-            style={{ width: '100%', justifyContent: 'center', padding: 11, fontSize: 14, opacity: (!canGenerate || loading) ? 0.5 : 1, cursor: (!canGenerate || loading) ? 'not-allowed' : 'pointer' }}>
+          <button className="btn btn-accent" onClick={handleGenerate} disabled={!canGenerate || loading}
+            style={{ width: '100%', justifyContent: 'center', padding: 11, fontSize: 14 }}>
             {loading
               ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
               : <><Sparkles size={14} /> Generate {form.count} Topics</>}

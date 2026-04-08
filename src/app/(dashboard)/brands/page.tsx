@@ -183,10 +183,11 @@ export default function BrandsPage() {
     setScraping(true)
     setScrapeError('')
     try {
+      const urls = form.website.split(/[\s,]+/).filter((u: string) => u.trim() && u.includes('.'))
       const res = await fetch('/api/scrape-brand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: form.website })
+        body: JSON.stringify({ urls })
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
@@ -472,15 +473,14 @@ export default function BrandsPage() {
                 {/* ── OVERVIEW ── */}
                 {activeSection === 'overview' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    <SectionTitle icon={Globe} title="Website" subtitle="Enter the brand website URL to auto-fill brand information using AI." />
+                    <SectionTitle icon={Globe} title="Brand Sources" subtitle="Enter the brand website and social media URLs (one per line/comma separated) to auto-fill information." />
 
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <input className="form-input" style={{ flex: 1 }} value={form.website}
+                      <textarea className="form-input" style={{ flex: 1, resize: 'vertical' }} rows={3} value={form.website}
                         onChange={e => setF('website')(e.target.value)}
-                        placeholder="https://brand.com"
-                        onKeyDown={e => e.key === 'Enter' && handleScrape()} />
-                      <button className="btn btn-secondary" onClick={handleScrape} disabled={!form.website || scraping} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {scraping ? <><div className="loading-spinner" style={{ width: 13, height: 13 }} /> Scanning…</> : <><Sparkles size={13} /> Auto-fill from Website</>}
+                        placeholder="https://brand.com&#10;https://instagram.com/brand" />
+                      <button className="btn btn-secondary" onClick={handleScrape} disabled={!form.website || scraping} style={{ whiteSpace: 'nowrap', flexShrink: 0, height: 'fit-content' }}>
+                        {scraping ? <><div className="loading-spinner" style={{ width: 13, height: 13 }} /> Scanning…</> : <><Sparkles size={13} /> Auto-fill AI</>}
                       </button>
                     </div>
                     {scrapeError && (

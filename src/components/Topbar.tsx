@@ -1,11 +1,20 @@
 'use client'
-import { Search, Bell, Plus } from 'lucide-react'
+import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export default function Topbar() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  // Avoid hydration mismatch — only render theme toggle after mount
+  useEffect(() => setMounted(true), [])
+
+  const isDark = theme === 'dark'
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    // Optional: add router.push('/login') but session state change will handle it via layout
   }
 
   return (
@@ -23,19 +32,34 @@ export default function Topbar() {
           New Content
         </a>
 
+        {/* Theme toggle */}
+        {mounted && (
+          <button
+            className="icon-btn"
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ position: 'relative' }}
+          >
+            {isDark
+              ? <Sun size={15} style={{ color: 'var(--accent-alt)' }} />
+              : <Moon size={15} />
+            }
+          </button>
+        )}
+
         {/* Notifications */}
         <div className="icon-btn" style={{ position: 'relative' }}>
           <Bell size={15} />
           <span style={{
             position: 'absolute', top: 7, right: 7,
             width: 6, height: 6, borderRadius: '50%',
-            background: 'var(--accent)',
-            boxShadow: '0 0 6px var(--accent)'
+            background: 'var(--accent-alt)',
+            boxShadow: '0 0 6px var(--accent-alt-glow)'
           }} />
         </div>
 
         {/* Avatar */}
-        <div className="avatar" onClick={handleLogout} title="Sign Out">BS</div>
+        <div className="avatar" onClick={handleLogout} title="Sign Out">F</div>
       </div>
     </header>
   )

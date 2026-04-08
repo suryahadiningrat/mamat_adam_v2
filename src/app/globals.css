@@ -4,32 +4,92 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root, [data-theme='light'] {
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'DM Mono', monospace;
 
-  /* Brand accent */
-  --accent: #7c6dfa;
-  --accent-glow: rgba(124, 109, 250, 0.18);
-  --accent-subtle: rgba(124, 109, 250, 0.08);
+  /* Primary Brand */
+  --accent: #5B479D;
+  --accent-hover: #6D57BD;
+  --accent-glow: rgba(91, 71, 157, 0.18);
+  --accent-subtle: rgba(91, 71, 157, 0.08);
+  --accent-alpha: rgba(91, 71, 157, 0.15);
 
-  /* Surface layers */
-  --surface-0: #080810;
-  --surface-1: #0f0f1a;
-  --surface-2: #161620;
-  --surface-3: #1c1c28;
-  --surface-4: #222232;
+  /* Secondary / Alt Accent */
+  --accent-alt: #FBB040;
+  --accent-alt-hover: #FDBF5E;
+  --accent-alt-glow: rgba(251, 176, 64, 0.18);
+  --accent-alt-subtle: rgba(251, 176, 64, 0.12);
+  --accent-alt-alpha: rgba(251, 176, 64, 0.15);
+  --accent-alt-text: #1a1a1a;
+
+  /* Light Surface layers */
+  --surface-0: #f4f5f9;
+  --surface-1: #ffffff;
+  --surface-2: #ffffff;
+  --surface-3: #f1f3f8;
+  --surface-4: #e4e7f0;
 
   /* Borders */
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.12);
-  --border-accent: rgba(124, 109, 250, 0.3);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --border-accent: rgba(91, 71, 157, 0.3);
 
   /* Text */
-  --text-primary: rgba(255,255,255,0.95);
-  --text-secondary: rgba(255,255,255,0.55);
-  --text-tertiary: rgba(255,255,255,0.30);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* Status */
+  --green: #059669;
+  --green-bg: rgba(5, 150, 105, 0.10);
+  --amber: #d97706;
+  --amber-bg: rgba(217, 119, 6, 0.10);
+  --red: #dc2626;
+  --red-bg: rgba(220, 38, 38, 0.10);
+  --red-alpha: rgba(220, 38, 38, 0.10);
+  --blue: #0284c7;
+  --blue-bg: rgba(2, 132, 199, 0.10);
+
+  /* Select arrow — light mode (dark arrow) */
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.4)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+[data-theme='dark'] {
+  /* Primary Brand */
+  --accent: #7C68C4;
+  --accent-hover: #9580D4;
+  --accent-glow: rgba(124, 104, 196, 0.20);
+  --accent-subtle: rgba(124, 104, 196, 0.10);
+  --accent-alpha: rgba(124, 104, 196, 0.15);
+
+  /* Secondary / Alt Accent */
+  --accent-alt: #FBB040;
+  --accent-alt-hover: #FDBF5E;
+  --accent-alt-glow: rgba(251, 176, 64, 0.20);
+  --accent-alt-subtle: rgba(251, 176, 64, 0.10);
+  --accent-alt-alpha: rgba(251, 176, 64, 0.15);
+  --accent-alt-text: #1a1100;
+
+  /* Dark Surface layers */
+  --surface-0: #08080f;
+  --surface-1: #0e0e1a;
+  --surface-2: #141420;
+  --surface-3: #1a1a28;
+  --surface-4: #212132;
+
+  /* Borders */
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.13);
+  --border-accent: rgba(124, 104, 196, 0.35);
+
+  /* Text */
+  --text-primary: rgba(255,255,255,0.93);
+  --text-secondary: rgba(255,255,255,0.52);
+  --text-tertiary: rgba(255,255,255,0.28);
+  --text-inverse: #0f0f1a;
 
   /* Status */
   --green: #22d3a0;
@@ -38,8 +98,12 @@
   --amber-bg: rgba(245, 158, 11, 0.08);
   --red: #f43f5e;
   --red-bg: rgba(244, 63, 94, 0.08);
+  --red-alpha: rgba(244, 63, 94, 0.10);
   --blue: #38bdf8;
   --blue-bg: rgba(56, 189, 248, 0.08);
+
+  /* Select arrow — dark mode (light arrow) */
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 
 * {
@@ -297,7 +361,7 @@ body::before {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #7c6dfa, #a78bfa);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -368,10 +432,41 @@ body::before {
   box-shadow: 0 0 20px var(--accent-glow);
 }
 
-.btn-primary:hover {
-  background: #6c5df0;
-  box-shadow: 0 0 28px rgba(124, 109, 250, 0.3);
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 0 28px var(--accent-glow);
   transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-accent {
+  background: var(--accent-alt);
+  color: var(--accent-alt-text);
+  border-color: var(--accent-alt);
+  box-shadow: 0 0 20px var(--accent-alt-glow);
+  font-weight: 600;
+}
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-alt-hover);
+  box-shadow: 0 0 28px var(--accent-alt-glow);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border-accent);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
 }
 
 .btn-secondary {
@@ -770,6 +865,27 @@ body::before {
 .usage-bar-fill.green { background: var(--green); }
 .usage-bar-fill.amber { background: var(--amber); }
 
+/* Light mode depth — panels need subtle shadows since border alone is too invisible */
+[data-theme='light'] .panel {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+[data-theme='light'] .sidebar {
+  box-shadow: 1px 0 0 var(--border), 2px 0 12px rgba(0,0,0,0.04);
+}
+
+[data-theme='light'] .topbar {
+  box-shadow: 0 1px 0 var(--border), 0 2px 8px rgba(0,0,0,0.04);
+}
+
+[data-theme='light'] .kpi-card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+[data-theme='light'] .kpi-card::before {
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.03), transparent);
+}
+
 /* Animate in */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
@@ -893,7 +1009,7 @@ body::before {
 }
 
 select.form-input {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 32px;

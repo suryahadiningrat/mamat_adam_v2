@@ -340,7 +340,7 @@ function CampaignsContent() {
             </div>
           )}
 
-          <button className="btn btn-primary" onClick={handleGenerate} disabled={!canGenerate} style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}>
+          <button className="btn btn-accent" onClick={handleGenerate} disabled={!canGenerate} style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}>
             {generating ? (
               <><div className="loading-spinner" style={{ width: 16, height: 16, marginRight: 8 }} /> Generating Brief...</>
             ) : (

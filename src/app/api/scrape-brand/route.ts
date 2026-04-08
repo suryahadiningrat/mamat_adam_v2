@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const EXTRACTION_PROMPT = `You are a brand analyst. Based on the website content below, extract structured brand information.
+const EXTRACTION_PROMPT = `You are a brand analyst. Based on the extracted website and social media content below, extract structured brand information.
 
 Return ONLY a valid JSON object with these exact fields (use empty string "" or empty array [] if not found):
 {
@@ -21,44 +21,46 @@ Return ONLY a valid JSON object with these exact fields (use empty string "" or 
   "donts": ["Content dont #1", "Content dont #2"]
 }
 
-Website content:
+Website and Social Media content:
 `
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json()
-    if (!url) return NextResponse.json({ error: 'URL is required' }, { status: 400 })
-
-    // Normalize URL
-    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`
-
-    // Fetch the website
-    let htmlContent = ''
-    try {
-      const res = await fetch(normalizedUrl, {
-        signal: AbortSignal.timeout(10000),
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BrandScraper/1.0)' }
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      htmlContent = await res.text()
-    } catch (fetchErr: any) {
-      return NextResponse.json({ error: `Could not fetch website: ${fetchErr.message}` }, { status: 400 })
+    const { url, urls } = await req.json()
+    const urlsToScrape = Array.isArray(urls) ? urls : (url ? [url] : [])
+    
+    if (urlsToScrape.length === 0) {
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 })
     }
 
-    // Strip HTML to plain text
-    const text = htmlContent
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
-      .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
-      .trim()
-      .slice(0, 5000)
+    // Fetch all URLs in parallel using Jina Reader to bypass bot blocks and get clean Markdown
+    const fetchPromises = urlsToScrape.slice(0, 5).map(async (u: string) => {
+      const normalizedUrl = u.startsWith('http') ? u : `https://${u}`
+      const jinaUrl = `https://r.jina.ai/${normalizedUrl}`
+      
+      try {
+        const res = await fetch(jinaUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: { 'X-Return-Format': 'markdown' }
+        })
+        if (!res.ok) return `[Failed to fetch ${u} - HTTP ${res.status}]`
+        const text = await res.text()
+        return `=== Source: ${u} ===\n${text.slice(0, 8000)}`
+      } catch (fetchErr: any) {
+        return `[Error fetching ${u}: ${fetchErr.message}]`
+      }
+    })
 
-    if (text.length < 50) {
-      return NextResponse.json({ error: 'Could not extract meaningful content from this URL.' }, { status: 400 })
+    const results = await Promise.all(fetchPromises)
+    let combinedText = results.join('\n\n')
+    
+    // Trim total length so we don't blow up Claude's context
+    if (combinedText.length > 25000) {
+      combinedText = combinedText.slice(0, 25000)
+    }
+
+    if (combinedText.replace(/\[Failed.*?\]|\[Error.*?\]/g, '').trim().length < 50) {
+      return NextResponse.json({ error: 'Could not extract meaningful content from the provided URLs.' }, { status: 400 })
     }
 
     // Send to Claude
@@ -77,7 +79,7 @@ export async function POST(req: NextRequest) {
         max_tokens: 1500,
         messages: [{
           role: 'user',
-          content: EXTRACTION_PROMPT + text
+          content: EXTRACTION_PROMPT + combinedText
         }]
       })
     })
