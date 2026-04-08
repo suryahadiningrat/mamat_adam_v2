@@ -384,16 +384,16 @@ export default function ProductsPage() {
                           <Brain size={12} style={{ color: '#3b82f6' }} />
                           <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Product Brain</span>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           <div>
                             <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>USP</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                               {product.brain?.usp || '-'}
                             </div>
                           </div>
                           <div>
                             <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Price Tier</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
                               {product.brain?.price_tier || '-'}
                             </div>
                           </div>
@@ -438,6 +438,40 @@ export default function ProductsPage() {
                   <AlertCircle size={14} /> {errorMsg}
                 </div>
               )}
+
+              <div className="form-group">
+                <label className="form-label">Product Sources</label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <textarea
+                    className="form-input"
+                    style={{ flex: 1, resize: 'vertical' }}
+                    rows={2}
+                    value={productSources}
+                    onChange={e => setProductSources(e.target.value)}
+                    placeholder={'https://brand.com/product\nhttps://instagram.com/brand'}
+                  />
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleScrape}
+                    disabled={!productSources || scraping}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, height: 'fit-content' }}
+                  >
+                    {scraping
+                      ? <><div className="loading-spinner" style={{ width: 13, height: 13 }} /> Scanning…</>
+                      : <><Sparkles size={13} /> Auto-fill AI</>}
+                  </button>
+                </div>
+                {scrapeError && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={12} /> {scrapeError}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  Paste product page or social URLs — AI will auto-fill all fields below.
+                </div>
+              </div>
+
+              <div style={{ height: 1, background: 'var(--border)' }} />
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 20 }}>
                 <div className="form-group">
@@ -498,42 +532,9 @@ export default function ProductsPage() {
               </div>
 
               <div style={{ height: 1, background: 'var(--border)', margin: '8px 0' }} />
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <Brain size={16} style={{ color: '#3b82f6' }}/> Product Brain
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
-                  Enter product page or social media URLs to auto-fill the fields below with AI.
-                </p>
-                <div className="form-group">
-                  <label className="form-label">Product Sources</label>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <textarea
-                      className="form-input"
-                      style={{ flex: 1, resize: 'vertical' }}
-                      rows={2}
-                      value={productSources}
-                      onChange={e => setProductSources(e.target.value)}
-                      placeholder={'https://brand.com/product\nhttps://instagram.com/brand'}
-                    />
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleScrape}
-                      disabled={!productSources || scraping}
-                      style={{ whiteSpace: 'nowrap', flexShrink: 0, height: 'fit-content' }}
-                    >
-                      {scraping
-                        ? <><div className="loading-spinner" style={{ width: 13, height: 13 }} /> Scanning…</>
-                        : <><Sparkles size={13} /> Auto-fill AI</>}
-                    </button>
-                  </div>
-                  {scrapeError && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <AlertCircle size={12} /> {scrapeError}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Brain size={16} style={{ color: '#3b82f6' }}/> Product Brain
+              </h3>
 
               <div className="form-group">
                 <label className="form-label">Unique Selling Proposition (USP)</label>
