@@ -170,45 +170,33 @@ body::before {
 }
 
 .sidebar-logo {
-  padding: 16px 20px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 10px;
   height: 52px;
-}
-
-.logo-mark {
-  width: 28px;
-  height: 28px;
-  background: var(--accent);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 13px;
-  color: white;
   flex-shrink: 0;
-  box-shadow: 0 0 16px var(--accent-glow);
 }
 
-.logo-text {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
+.sidebar-logo img {
+  /* Invert to white in dark mode so the purple logo stays visible */
+  filter: none;
+  transition: filter 0.2s;
 }
 
-.logo-sub {
-  font-size: 9px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+[data-theme='dark'] .sidebar-logo img {
+  filter: brightness(0) invert(1);
 }
+
+/* Keep legacy classes for any pages still using them */
+.logo-mark {
+  width: 28px; height: 28px; background: var(--accent); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 13px; color: white;
+  flex-shrink: 0; box-shadow: 0 0 16px var(--accent-glow);
+}
+.logo-text { font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--text-primary); letter-spacing: -0.3px; }
+.logo-sub { font-size: 9px; font-weight: 500; color: var(--text-tertiary); letter-spacing: 0.5px; text-transform: uppercase; }
 
 .sidebar-nav {
   flex: 1;
