@@ -381,8 +381,86 @@ export default function TopicsPage() {
             </div>
           </div>
 
-          {/* Platform & Objective */}
+          {/* Additional Context */}
           <div className="panel fade-up fade-up-3">
+            <div className="panel-header">
+              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <Link size={14} style={{ color: 'var(--text-secondary)' }} /> Reference & Context <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
+              </span>
+            </div>
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="url"
+                    value={form.referenceUrl}
+                    onChange={e => { set('referenceUrl')(e.target.value); setScrapeResult(null); setScrapeError(''); setReferenceSummary('') }}
+                    placeholder="https://…"
+                    style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', minWidth: 0 }}
+                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    onKeyDown={e => e.key === 'Enter' && handleScrapeUrl()}
+                  />
+                  <button onClick={handleScrapeUrl} disabled={scraping || !form.referenceUrl.trim()} style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 8,
+                    fontSize: 12, fontWeight: 500, cursor: scraping || !form.referenceUrl.trim() ? 'not-allowed' : 'pointer',
+                    background: scrapeResult ? 'rgba(16,185,129,0.12)' : 'rgba(91,71,157,0.12)',
+                    border: scrapeResult ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--border-accent)',
+                    color: scrapeResult ? '#10b981' : 'var(--accent)',
+                    fontFamily: 'var(--font-body)', opacity: scraping || !form.referenceUrl.trim() ? 0.55 : 1, transition: 'all 0.15s'
+                  }}>
+                    {scraping ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : scrapeResult ? <CheckCircle2 size={12} /> : <Link size={12} />}
+                    {scraping ? 'Analyzing…' : scrapeResult ? 'Analyzed' : 'Analyze'}
+                  </button>
+                </div>
+                {scrapeError && (
+                  <p style={{ fontSize: 11.5, color: 'var(--red)', margin: 0, lineHeight: 1.4 }}>{scrapeError}</p>
+                )}
+                {scrapeResult && (
+                  <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: '#10b981' }}>
+                          {scrapeResult.content_type?.replace(/_/g, ' ')}
+                        </span>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35 }}>{scrapeResult.title}</p>
+                      </div>
+                      <button onClick={() => { setScrapeResult(null); setReferenceSummary(''); setScrapeError('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 2, lineHeight: 1, flexShrink: 0 }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{scrapeResult.main_topic}</p>
+                    {scrapeResult.content_angles?.length > 0 && (
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Suggested angles</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {scrapeResult.content_angles.map((a, i) => (
+                            <span key={i} style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>· {a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Direction / notes</label>
+                <textarea
+                  value={form.context}
+                  onChange={e => set('context')(e.target.value)}
+                  placeholder="E.g. Focus on upcoming Ramadan campaign, avoid competitor mentions…"
+                  rows={3}
+                  style={{ resize: 'vertical', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', width: '100%', lineHeight: 1.5 }}
+                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Platform & Objective */}
+          <div className="panel fade-up fade-up-5">
             <div className="panel-header">
               <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <Layout size={14} style={{ color: 'var(--text-secondary)' }} /> Platform & Objective
@@ -446,84 +524,6 @@ export default function TopicsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-tertiary)' }}>
                   <span>1</span><span>15</span><span>30</span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Context */}
-          <div className="panel fade-up fade-up-5">
-            <div className="panel-header">
-              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <ChevronDown size={14} style={{ color: 'var(--text-secondary)' }} /> Additional Context <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
-              </span>
-            </div>
-            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Direction / notes</label>
-                <textarea
-                  value={form.context}
-                  onChange={e => set('context')(e.target.value)}
-                  placeholder="E.g. Focus on upcoming Ramadan campaign, avoid competitor mentions…"
-                  rows={3}
-                  style={{ resize: 'vertical', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', width: '100%', lineHeight: 1.5 }}
-                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    type="url"
-                    value={form.referenceUrl}
-                    onChange={e => { set('referenceUrl')(e.target.value); setScrapeResult(null); setScrapeError(''); setReferenceSummary('') }}
-                    placeholder="https://…"
-                    style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', minWidth: 0 }}
-                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-                    onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                    onKeyDown={e => e.key === 'Enter' && handleScrapeUrl()}
-                  />
-                  <button onClick={handleScrapeUrl} disabled={scraping || !form.referenceUrl.trim()} style={{
-                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 8,
-                    fontSize: 12, fontWeight: 500, cursor: scraping || !form.referenceUrl.trim() ? 'not-allowed' : 'pointer',
-                    background: scrapeResult ? 'rgba(16,185,129,0.12)' : 'rgba(91,71,157,0.12)',
-                    border: scrapeResult ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--border-accent)',
-                    color: scrapeResult ? '#10b981' : 'var(--accent)',
-                    fontFamily: 'var(--font-body)', opacity: scraping || !form.referenceUrl.trim() ? 0.55 : 1, transition: 'all 0.15s'
-                  }}>
-                    {scraping ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : scrapeResult ? <CheckCircle2 size={12} /> : <Link size={12} />}
-                    {scraping ? 'Analyzing…' : scrapeResult ? 'Analyzed' : 'Analyze'}
-                  </button>
-                </div>
-                {scrapeError && (
-                  <p style={{ fontSize: 11.5, color: 'var(--red)', margin: 0, lineHeight: 1.4 }}>{scrapeError}</p>
-                )}
-                {scrapeResult && (
-                  <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: '#10b981' }}>
-                          {scrapeResult.content_type?.replace(/_/g, ' ')}
-                        </span>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35 }}>{scrapeResult.title}</p>
-                      </div>
-                      <button onClick={() => { setScrapeResult(null); setReferenceSummary(''); setScrapeError('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 2, lineHeight: 1, flexShrink: 0 }}>
-                        <X size={12} />
-                      </button>
-                    </div>
-                    <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{scrapeResult.main_topic}</p>
-                    {scrapeResult.content_angles?.length > 0 && (
-                      <div>
-                        <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Suggested angles</p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          {scrapeResult.content_angles.map((a, i) => (
-                            <span key={i} style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>· {a}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>
