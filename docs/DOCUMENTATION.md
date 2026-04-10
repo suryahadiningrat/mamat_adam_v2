@@ -868,10 +868,11 @@ Extract brand information from website/social URLs.
 
 **Process:**
 1. Normalize URLs (add `https://` if missing)
-2. Fetch each via Jina Reader (`https://r.jina.ai/{url}`) — returns clean Markdown, bypasses bot blocks
-3. Limit each URL to 8000 chars, total to 25000 chars
-4. Send to Claude with structured extraction prompt
-5. Parse and return JSON
+2. Try Jina Reader (`https://r.jina.ai/{url}`) first — returns clean Markdown, bypasses most bot blocks
+3. If Jina returns < 200 chars (rate-limited / blocked), fall back to direct fetch + HTML stripping
+4. Limit each URL to 8000 chars, total to 25000 chars
+5. Send to Claude with structured extraction prompt
+6. Parse and return JSON
 
 **Output:**
 ```ts
@@ -898,7 +899,8 @@ Extract product information from website/social URLs.
 
 **Input:** Same as `scrape-brand`
 
-**Process:** Identical to scrape-brand — Jina Reader → Claude extraction
+**Process:** Same as scrape-brand — Jina Reader with direct-fetch fallback → Claude extraction
+> Note: `scrape-product` still uses Jina-only. If you see the same "Could not extract meaningful content" error there, apply the same `fetchWithFallback` pattern from `scrape-brand/route.ts`.
 
 **Output:**
 ```ts
@@ -1023,5 +1025,5 @@ Brand and product brain context is sent as ephemeral cached blocks (TTL: ~1 hour
 - **`recommendation_profiles` table** exists for AI-personalized suggestions per brand — seeds data for the Home page "AI Recommendations" section. Currently populated manually.
 - **`frameworks` and `hook_types`** are global seed data. Workspace-specific custom frameworks can be created (the schema supports it via `is_global = false`).
 - **Language:** Default generation language is Indonesian (`'id'`). The language param flows through all generation API routes and affects Claude's output language.
-- **Jina Reader** (`r.jina.ai`) is used as the scraping proxy for both brand and product — it converts any webpage to clean Markdown, handles JavaScript-rendered pages, and bypasses most bot protection. No API key required.
+- **Jina Reader** (`r.jina.ai`) is used as the scraping proxy for brand and product scraping — it converts any webpage to clean Markdown and bypasses most bot protection. No API key required, but the free tier rate-limits aggressively. `scrape-brand` now has a direct-fetch + HTML-strip fallback when Jina returns insufficient content. `scrape-product` still uses Jina-only and may need the same fix.
 - **Storage bucket:** `product_images` in Supabase Storage. Images are stored at path `{workspace_id}/{random}_{timestamp}.{ext}` and served as public URLs.
