@@ -206,7 +206,7 @@ export default function GeneratePage() {
   const [form, setForm] = useState({
     brandId: '', productId: '', platform: '', outputFormat: '',
     objective: '', framework: '', hookType: '', tone: '', visualStyle: '',
-    outputLength: '', additionalContext: ''
+    outputLength: '', additionalContext: '', referenceUrl: ''
   })
 
   const { workspaceId } = useWorkspace()
@@ -357,6 +357,7 @@ export default function GeneratePage() {
           visualStyle: form.visualStyle,
           outputLength: form.outputLength,
           additionalContext: contextOverride ?? form.additionalContext,
+          referenceUrl: form.referenceUrl || undefined,
           workspace_id: workspaceId
         })
       })
@@ -608,6 +609,14 @@ export default function GeneratePage() {
                     background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)',
                     fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', transition: 'border-color 0.15s', lineHeight: 1.5
                   }} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(optional)</span></label>
+                  <input type="url" value={form.referenceUrl} onChange={e => set('referenceUrl')(e.target.value)}
+                    placeholder="https://…"
+                    style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', transition: 'border-color 0.15s' }}
+                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'} />
                 </div>
               </div>
             </div>
