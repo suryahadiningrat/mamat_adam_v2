@@ -1,7 +1,7 @@
 # FCE Dashboard — Developer Documentation
 
 > **FCE (Floothink Content Engine)** — AI-powered social media content generation platform for brand marketing.  
-> Last updated: 2026-04-08
+> Last updated: 2026-04-10
 
 ---
 
@@ -86,7 +86,8 @@ src/
 │   │   ├── generate-topics/  # POST — bulk topic generation
 │   │   ├── generate-campaign/# POST — campaign strategy
 │   │   ├── scrape-brand/     # POST — brand info from URLs
-│   │   └── scrape-product/   # POST — product info from URLs
+│   │   ├── scrape-product/   # POST — product info from URLs
+│   │   └── scrape-url/       # POST — fetch any URL → structured summary for reference context
 │   ├── login/                # Auth page
 │   └── layout.tsx            # Root layout (theme, metadata)
 ├── contexts/
@@ -441,6 +442,10 @@ The primary content creation workflow.
 - Select platform: Instagram, TikTok, YouTube, Twitter/X, LinkedIn, Facebook
 - Select output format: Single Image, Carousel (3/5/7/10 slides), Reel, Story, Thread
 - Select brand and product
+- **Reference & Context panel** (always visible, before target/format selection):
+  - Paste any URL → "Analyze" → `/api/scrape-url` extracts structured summary
+  - Scraped `contextString` injected into generation prompt as REFERENCE MATERIAL
+  - Additional context / creative brief textarea
 - Advanced options:
   - Objective (Awareness / Engagement / Conversion / Retention / Education)
   - Framework: AIDA, PAS, BAB, or none
@@ -448,11 +453,11 @@ The primary content creation workflow.
   - Tone override
   - Visual style
   - Output length (Short / Medium / Long)
-  - Additional context / creative brief
 - Language toggle (defaults to Indonesian)
 - Generate button → calls `/api/generate`
-- Output panel shows all generated fields with copy buttons
-- Save to library
+- **All output fields are editable** before saving (copy on visual, caption, CTAs, hashtags, visual direction, rationale)
+- **Regenerate with context**: opens a revision textarea — user describes what to change, then regenerates
+- Save to library (saves the edited values, not the original output)
 
 **URL query params** (pre-fill from Topics page):
 `topic`, `format`, `pillar`, `platform`, `brandId`, `productId`, `objective`
@@ -467,13 +472,22 @@ The primary content creation workflow.
 Bulk content calendar generation.
 
 **Features:**
-- Select brand + product
+- Select brand
+- **Product selection mode:**
+  - General — no product context
+  - Mixed — auto-distribute topics across all active products
+  - Specific — multi-select checkboxes to choose particular products
 - Select platform
 - Set date range (from / to)
-- Set number of topics (5–30, slider)
+- Set number of topics (1–30, slider, step 1)
 - Optional objective filter
+- **Reference & Context panel** (position 2, always visible):
+  - Paste any URL → "Analyze" → `/api/scrape-url` extracts structured summary
+  - Scraped `contextString` injected into generation prompt; at least half of topics should reflect the reference
+  - Direction/notes textarea for manual guidance
 - Generate → calls `/api/generate-topics`
-- Preview generated topics in a table (title, pillar, format, date)
+- **Inline-editable topic cards**: title, pillar, format, date are all editable in the card
+- **Per-card regeneration**: each card has a Regenerate button → revision context textarea → regenerates just that one topic
 - Save all topics at once to `content_topics`
 - Quick-link each topic to `/generate` pre-filled
 
@@ -682,7 +696,9 @@ Generate a single piece of social media content.
   visualStyle: string,
   outputLength: string,    // 'short' | 'medium' | 'long'
   additionalContext: string,
-  language: string,        // 'id' | 'en'
+  referenceUrl: string,       // raw URL (fallback)
+  referenceSummary: string,   // pre-formatted contextString from /api/scrape-url (preferred)
+  language: string,           // 'id' | 'en'
   workspace_id: string
 }
 ```
@@ -725,13 +741,16 @@ Generate bulk content topic calendar.
 ```ts
 {
   brand: { name, industry, toneOfVoice, personality, audience, brandSummary, contentPillars, socialPlatforms, marketingStrategy },
-  product: { name, usp } | null,
+  products: { id, name, usp }[],  // array — empty for General mode, full list for Mixed, subset for Specific
   platform: string,
-  count: number,           // 5–30
+  count: number,           // 1–30
   dateFrom: string,        // YYYY-MM-DD
   dateTo: string,          // YYYY-MM-DD
   workspace_id: string,
-  language: string
+  language: string,
+  context: string,         // user direction notes
+  referenceUrl: string,    // raw URL (fallback if no referenceSummary)
+  referenceSummary: string // pre-formatted contextString from /api/scrape-url (preferred)
 }
 ```
 
@@ -743,13 +762,55 @@ Generate bulk content topic calendar.
     content_title: string,
     content_pillar: string,
     content_format: string,
-    publish_date: string    // YYYY-MM-DD
+    publish_date: string,   // YYYY-MM-DD
+    product_id?: string     // assigned when multiple products used
   }[]
 }
 ```
 
 **AI model:** `claude-sonnet-4-20250514`  
 **Max tokens:** 2000
+
+---
+
+### `POST /api/scrape-url`
+Fetch any URL and extract structured content for use as generation reference material.
+
+**Input:**
+```ts
+{ url: string }
+```
+
+**Process:**
+1. Validate URL format
+2. Server-side fetch with 10s timeout; reject non-HTML content types
+3. Strip HTML: remove script/style/nav/footer/header/aside blocks, replace block elements with newlines, decode entities, collapse whitespace
+4. Truncate plain text to 5000 chars
+5. Send to Claude Haiku for structured extraction
+6. Build `contextString` — pre-formatted block for prompt injection
+
+**Output:**
+```ts
+{
+  success: boolean,
+  url: string,
+  extracted: {
+    title: string,
+    content_type: string,    // e.g. "Product Page", "Blog Post", "Landing Page"
+    main_topic: string,
+    key_claims: string[],
+    tone: string,
+    target_audience: string,
+    summary: string,
+    content_angles: string[]
+  },
+  contextString: string  // pre-formatted for direct prompt injection as REFERENCE MATERIAL
+}
+```
+
+**AI model:** `claude-haiku-4-5-20251001`  
+**Max tokens:** 600  
+**Usage:** `contextString` is stored in UI state and passed as `referenceSummary` to `/api/generate` and `/api/generate-topics`. Claude is instructed to derive at least half of topics/content from this reference.
 
 ---
 
@@ -913,7 +974,7 @@ These are appended to the system prompt in `/api/generate` and `/api/generate-to
 | Model | ID | Used In | Characteristics |
 |---|---|---|---|
 | Claude Sonnet 4 | `claude-sonnet-4-20250514` | Content generation, topics, campaigns | High quality, supports prompt caching |
-| Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Brand scraping, product scraping | Fast, cheap, good for extraction tasks |
+| Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Brand scraping, product scraping, URL scraping | Fast, cheap, good for extraction tasks |
 
 ### Pricing (Sonnet 4 with caching)
 
@@ -951,6 +1012,7 @@ Brand and product brain context is sent as ephemeral cached blocks (TTL: ~1 hour
 | User + workspace settings | `/settings` | — | `user_profiles`, `workspaces`, `workspace_invitations` |
 | Workspace branding + team | `/workspace-settings` | — | `workspaces`, `user_workspace_roles`, `workspace_invitations` |
 | Superadmin | `/admin` | — | `workspace_invitations` |
+| Reference URL scraping | `/api/scrape-url` | Haiku 4.5 | — (returns contextString for prompt injection) |
 
 ---
 

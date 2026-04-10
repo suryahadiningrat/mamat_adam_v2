@@ -1,5 +1,9 @@
 # FCE Dashboard — Deployment & Setup Guide
 
+> For AI context and project architecture, read `CLAUDE.md` (root) and `docs/ARCHITECTURE.md` first.
+> For current build status, read `docs/HANDOFF.md`.
+
+
 ## Stack Overview
 - **Frontend + Routing**: Next.js 14 (App Router) on Vercel (free)
 - **Database + Auth + Storage**: Supabase (free tier: 500MB DB, 50K users)
@@ -195,14 +199,10 @@ npm run dev
 
 ---
 
-## 8. Next Steps After Dashboard
+## 8. Current Build Status
 
-Priority order to build next:
-1. `/brands` — Brand Brain list + detail editor
-2. `/generate` — Content Generator form + result screen
-3. `/api/generate` — Route handler calling Anthropic API with caching
-4. `/library` — Content Library with search/filter
-5. `/campaigns` — Campaign Generator
+All 11 dashboard pages are complete and production-ready.
+See `docs/HANDOFF.md` for detailed status and pending items.
 
 ---
 
