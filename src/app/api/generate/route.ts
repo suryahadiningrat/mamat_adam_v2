@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
       outputLength,
       additionalContext,
       referenceUrl,
+      referenceSummary,
       language = 'Indonesian',
       workspace_id
     } = body
@@ -169,7 +170,7 @@ ${product ? `PRODUCT BRAIN:
 - Output Length: ${outputLength || 'Medium'}
 - Language: ${language}
 ${additionalContext ? `- Additional Context: ${additionalContext}` : ''}
-${referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
+${referenceSummary ? `\n${referenceSummary}` : referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
 
 Return ONLY this JSON structure:
 ${schema}`

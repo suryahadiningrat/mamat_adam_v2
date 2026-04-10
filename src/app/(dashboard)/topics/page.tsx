@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   Layers, Sparkles, RefreshCw, Brain, ChevronDown,
-  Calendar, Tag, Layout, Trash2, CheckCircle2, ArrowRight, Save
+  Calendar, Tag, Layout, Trash2, CheckCircle2, ArrowRight, Save, Link, X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
@@ -96,6 +96,11 @@ export default function TopicsPage() {
   const [saving, setSaving] = useState(false)
   const [allSaved, setAllSaved] = useState(false)
 
+  const [scraping, setScraping] = useState(false)
+  const [scrapeError, setScrapeError] = useState('')
+  const [scrapeResult, setScrapeResult] = useState<{ title: string; content_type: string; main_topic: string; key_claims: string[]; tone: string; summary: string; content_angles: string[] } | null>(null)
+  const [referenceSummary, setReferenceSummary] = useState('')
+
   useEffect(() => {
     if (!workspaceId) return
     async function init() {
@@ -156,6 +161,7 @@ export default function TopicsPage() {
           dateTo: form.dateTo,
           context: form.context || undefined,
           referenceUrl: form.referenceUrl || undefined,
+          referenceSummary: referenceSummary || undefined,
           workspace_id: workspaceId,
         })
       })
@@ -236,7 +242,9 @@ export default function TopicsPage() {
         body: JSON.stringify({
           brand: brandPayload, products: productsPayload, platform: form.platform,
           count: 1, dateFrom: topics[idx]?.publish_date || form.dateFrom,
-          dateTo: form.dateTo, context: revisionContext, workspace_id: workspaceId,
+          dateTo: form.dateTo, context: revisionContext,
+          referenceSummary: referenceSummary || undefined,
+          workspace_id: workspaceId,
         })
       })
       const data = await res.json()
@@ -244,6 +252,32 @@ export default function TopicsPage() {
         setTopics(prev => prev.map((t, i) => i === idx ? { ...data.topics[0], saved: false } : t))
       }
     } catch { alert('Regeneration failed') }
+  }
+
+  async function handleScrapeUrl() {
+    if (!form.referenceUrl.trim()) return
+    setScraping(true)
+    setScrapeError('')
+    setScrapeResult(null)
+    setReferenceSummary('')
+    try {
+      const res = await fetch('/api/scrape-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: form.referenceUrl.trim() }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setScrapeResult(data.extracted)
+        setReferenceSummary(data.contextString)
+      } else {
+        setScrapeError(data.error || 'Could not analyze this URL')
+      }
+    } catch {
+      setScrapeError('Network error — check your connection')
+    } finally {
+      setScraping(false)
+    }
   }
 
   const set = (k: string) => (v: any) => setForm(f => ({ ...f, [k]: v }))
@@ -438,15 +472,58 @@ export default function TopicsPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
-                <input
-                  type="url"
-                  value={form.referenceUrl}
-                  onChange={e => set('referenceUrl')(e.target.value)}
-                  placeholder="https://…"
-                  style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', width: '100%' }}
-                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="url"
+                    value={form.referenceUrl}
+                    onChange={e => { set('referenceUrl')(e.target.value); setScrapeResult(null); setScrapeError(''); setReferenceSummary('') }}
+                    placeholder="https://…"
+                    style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', minWidth: 0 }}
+                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    onKeyDown={e => e.key === 'Enter' && handleScrapeUrl()}
+                  />
+                  <button onClick={handleScrapeUrl} disabled={scraping || !form.referenceUrl.trim()} style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 8,
+                    fontSize: 12, fontWeight: 500, cursor: scraping || !form.referenceUrl.trim() ? 'not-allowed' : 'pointer',
+                    background: scrapeResult ? 'rgba(16,185,129,0.12)' : 'rgba(91,71,157,0.12)',
+                    border: scrapeResult ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--border-accent)',
+                    color: scrapeResult ? '#10b981' : 'var(--accent)',
+                    fontFamily: 'var(--font-body)', opacity: scraping || !form.referenceUrl.trim() ? 0.55 : 1, transition: 'all 0.15s'
+                  }}>
+                    {scraping ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : scrapeResult ? <CheckCircle2 size={12} /> : <Link size={12} />}
+                    {scraping ? 'Analyzing…' : scrapeResult ? 'Analyzed' : 'Analyze'}
+                  </button>
+                </div>
+                {scrapeError && (
+                  <p style={{ fontSize: 11.5, color: 'var(--red)', margin: 0, lineHeight: 1.4 }}>{scrapeError}</p>
+                )}
+                {scrapeResult && (
+                  <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: '#10b981' }}>
+                          {scrapeResult.content_type?.replace(/_/g, ' ')}
+                        </span>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35 }}>{scrapeResult.title}</p>
+                      </div>
+                      <button onClick={() => { setScrapeResult(null); setReferenceSummary(''); setScrapeError('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 2, lineHeight: 1, flexShrink: 0 }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{scrapeResult.main_topic}</p>
+                    {scrapeResult.content_angles?.length > 0 && (
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Suggested angles</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {scrapeResult.content_angles.map((a, i) => (
+                            <span key={i} style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>· {a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
