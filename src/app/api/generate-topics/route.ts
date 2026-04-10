@@ -7,11 +7,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       brand,
-      product,
+      products,
       platform,
       count = 10,
       dateFrom,
       dateTo,
+      context,
+      referenceUrl,
       workspace_id,
       language = 'Indonesian'
     } = body
@@ -39,9 +41,17 @@ export async function POST(req: NextRequest) {
       ? ['Single Image', 'Carousel', 'Article/Post']
       : ['Single Image', 'Carousel', 'Reel / Short Video', 'Story']
 
-    const productContext = product
-      ? `Product focus: ${product.name}. USP: ${product.usp || 'Not specified'}.`
+    const productContext = products && products.length > 0
+      ? products.length === 1
+        ? `Product focus: ${products[0].name}. USP: ${products[0].usp || 'Not specified'}.`
+        : `Distribute topics across these products (assign one product_id per topic):\n${products.map((p: { id: string; name: string; usp: string }) => `- id: "${p.id}", name: "${p.name}", usp: "${p.usp || 'Not specified'}"`).join('\n')}`
       : `No specific product — generate brand-level or educational/awareness topics.`
+
+    const extraContext = context
+      ? `\nADDITIONAL DIRECTION:\n${context}${referenceUrl ? `\nReference URL: ${referenceUrl}` : ''}`
+      : referenceUrl
+      ? `\nReference URL for inspiration: ${referenceUrl}`
+      : ''
 
     const dateContext = dateFrom && dateTo
       ? `Spread publish dates between ${dateFrom} and ${dateTo}.`
@@ -62,7 +72,7 @@ BRAND CONTEXT:
 ${brand.brandSummary ? `- Brand Summary: ${brand.brandSummary}` : ''}
 
 ${productContext}
-
+${extraContext}
 TASK:
 Generate exactly ${count} content topic ideas for ${platform || 'social media'}.
 ${dateContext}
@@ -96,7 +106,7 @@ Return ONLY valid JSON — no markdown, no explanation:
       "content_title": "string",
       "content_pillar": "string",
       "content_format": "string",
-      "publish_date": "YYYY-MM-DD"
+      "publish_date": "YYYY-MM-DD"${products && products.length > 1 ? `,\n      "product_id": "use the exact id string from the product list above"` : ''}
     }
   ]
 }`

@@ -193,6 +193,14 @@ export default function GeneratePage() {
   const [editableTitle, setEditableTitle] = useState('')
   const [editableSlides, setEditableSlides] = useState<Slide[]>([])
   const [editableScenes, setEditableScenes] = useState<Scene[]>([])
+  const [editCopyOnVisual, setEditCopyOnVisual] = useState('')
+  const [editCaption, setEditCaption] = useState('')
+  const [editCtaOptions, setEditCtaOptions] = useState<string[]>([])
+  const [editHashtags, setEditHashtags] = useState('')
+  const [editVisualDirection, setEditVisualDirection] = useState('')
+  const [editRationale, setEditRationale] = useState('')
+  const [regenOpen, setRegenOpen] = useState(false)
+  const [regenContext, setRegenContext] = useState('')
   const [usage, setUsage] = useState<null | Record<string, number>>(null)
 
   const [form, setForm] = useState({
@@ -282,13 +290,21 @@ export default function GeneratePage() {
   const toneVoice = selectedBrand?.brand_brain_versions?.[0]?.tone_of_voice || 'Standard Professional'
   const brainUSP = isGeneralMode ? 'Brand-level content' : (selectedProduct?.product_brain_versions?.[0]?.usp || 'Premium Quality')
 
-  async function handleGenerate() {
+  async function handleGenerate(contextOverride?: string) {
     if (!canGenerate || !selectedBrand) return
     setLoading(true)
     setOutput(null)
     setEditableTitle('')
     setEditableSlides([])
     setEditableScenes([])
+    setEditCopyOnVisual('')
+    setEditCaption('')
+    setEditCtaOptions([])
+    setEditHashtags('')
+    setEditVisualDirection('')
+    setEditRationale('')
+    setRegenOpen(false)
+    setRegenContext('')
     setLibrarySaved(false)
 
     try {
@@ -340,7 +356,7 @@ export default function GeneratePage() {
           tone: form.tone,
           visualStyle: form.visualStyle,
           outputLength: form.outputLength,
-          additionalContext: form.additionalContext,
+          additionalContext: contextOverride ?? form.additionalContext,
           workspace_id: workspaceId
         })
       })
@@ -351,6 +367,12 @@ export default function GeneratePage() {
         setEditableTitle(data.output.content_title || '')
         if (data.output.slides) setEditableSlides(data.output.slides)
         if (data.output.scenes) setEditableScenes(data.output.scenes)
+        setEditCopyOnVisual(data.output.copy_on_visual || '')
+        setEditCaption(data.output.caption || '')
+        setEditCtaOptions(data.output.cta_options || [])
+        setEditHashtags((data.output.hashtag_pack || []).join(' '))
+        setEditVisualDirection(data.output.visual_direction || '')
+        setEditRationale(data.output.rationale || '')
       } else {
         alert(data.error || 'Generation failed')
       }
@@ -386,18 +408,22 @@ export default function GeneratePage() {
 
       if (reqErr) throw reqErr
 
+      const hashtagPack = editHashtags.trim()
+        ? editHashtags.trim().split(/\s+/).filter(Boolean)
+        : (output.hashtag_pack || null)
+
       const { error: outErr } = await supabase.from('generation_outputs').insert({
         request_id: reqData.id,
         workspace_id: workspaceId,
         content_title: editableTitle || output.content_title || null,
-        copy_on_visual: output.copy_on_visual || null,
-        caption: output.caption || null,
+        copy_on_visual: editCopyOnVisual || null,
+        caption: editCaption || null,
         slides: isCarousel ? editableSlides : null,
         scenes: isVideo ? editableScenes : null,
-        cta_options: output.cta_options || null,
-        hashtag_pack: output.hashtag_pack || null,
-        visual_direction: output.visual_direction || null,
-        rationale: output.rationale || null,
+        cta_options: editCtaOptions.length ? editCtaOptions : null,
+        hashtag_pack: hashtagPack,
+        visual_direction: editVisualDirection || null,
+        rationale: editRationale || null,
         raw_response: output,
         status: 'approved'
       })
@@ -409,6 +435,14 @@ export default function GeneratePage() {
     } finally {
       setSavingLibrary(false)
     }
+  }
+
+  function handleRegenerateWithContext() {
+    if (!regenContext.trim()) return
+    const combined = regenContext.trim() + (form.additionalContext ? `\n\n[Prior context: ${form.additionalContext}]` : '')
+    setRegenOpen(false)
+    setRegenContext('')
+    handleGenerate(combined)
   }
 
   // ─── Slide/Scene table editors ────────────────────────────────────────────
@@ -579,7 +613,7 @@ export default function GeneratePage() {
             </div>
           )}
 
-          <button className="btn btn-accent" onClick={handleGenerate} disabled={!canGenerate || loading} style={{
+          <button className="btn btn-accent" onClick={() => handleGenerate()} disabled={!canGenerate || loading} style={{
             width: '100%', justifyContent: 'center', padding: '11px', fontSize: 14
           }}>
             {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</> : <><Sparkles size={14} /> Generate Content</>}
@@ -605,20 +639,48 @@ export default function GeneratePage() {
           {output ? (
             <>
               {/* Header bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-                    {selectedBrand?.name} / {isGeneralMode ? 'General' : selectedProduct?.name}
-                  </span>
-                  <span style={{ marginLeft: 8, fontSize: 12, padding: '2px 8px', borderRadius: 20, background: 'rgba(124,109,250,0.1)', color: 'var(--accent)', fontWeight: 500, border: '1px solid var(--border-accent)' }}>
-                    {selectedFormat?.icon} {form.outputFormat}
-                  </span>
-                  <span style={{ marginLeft: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>{form.platform} · {form.objective}</span>
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                      {selectedBrand?.name} / {isGeneralMode ? 'General' : selectedProduct?.name}
+                    </span>
+                    <span style={{ marginLeft: 8, fontSize: 12, padding: '2px 8px', borderRadius: 20, background: 'rgba(124,109,250,0.1)', color: 'var(--accent)', fontWeight: 500, border: '1px solid var(--border-accent)' }}>
+                      {selectedFormat?.icon} {form.outputFormat}
+                    </span>
+                    <span style={{ marginLeft: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>{form.platform} · {form.objective}</span>
+                  </div>
+                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setRegenOpen(o => !o)}>
+                    <RefreshCw size={12} /> Regenerate
+                  </button>
+                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleSaveToLibrary} disabled={savingLibrary || librarySaved}>
+                    {librarySaved ? <><CheckCircle2 size={12} /> Approved</> : <><CheckCircle2 size={12} /> Approve</>}
+                  </button>
                 </div>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleGenerate}><RefreshCw size={12} /> Regenerate</button>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleSaveToLibrary} disabled={savingLibrary || librarySaved}>
-                  {librarySaved ? <><CheckCircle2 size={12} /> Approved</> : <><CheckCircle2 size={12} /> Approve</>}
-                </button>
+                {regenOpen && (
+                  <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <textarea
+                      value={regenContext}
+                      onChange={e => setRegenContext(e.target.value)}
+                      placeholder="What should be revised? (e.g. make the hook more curiosity-driven, shorten the caption, change CTA to be softer…)"
+                      rows={2}
+                      autoFocus
+                      style={{ fontSize: 13, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
+                      onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                      onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-accent" style={{ fontSize: 12, padding: '6px 14px' }}
+                        onClick={handleRegenerateWithContext} disabled={!regenContext.trim() || loading}>
+                        {loading ? <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Regenerating…</> : <><Sparkles size={12} /> Regenerate with context</>}
+                      </button>
+                      <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }}
+                        onClick={() => { setRegenOpen(false); setRegenContext('') }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Content Title */}
@@ -755,46 +817,59 @@ export default function GeneratePage() {
               {/* ── STANDARD COPY OUTPUT (Single Image, Story, etc) ─────── */}
               {!isCarousel && !isVideo && output.copy_on_visual && (
                 <OutputSection icon={Monitor} label="Copy On Visual" color="var(--accent)"
-                  extra={<div style={{ display: 'flex', gap: 6 }}><CopyBtn text={output.copy_on_visual} /><button className="btn btn-secondary" style={{ fontSize: 11.5, padding: '4px 9px' }} onClick={handleGenerate}><RefreshCw size={11} />Regen</button></div>}>
-                  <p style={{ fontSize: 14.5, color: 'var(--text-primary)', lineHeight: 1.65, fontWeight: 500 }}>{output.copy_on_visual}</p>
+                  extra={<CopyBtn text={editCopyOnVisual} />}>
+                  <textarea value={editCopyOnVisual} onChange={e => setEditCopyOnVisual(e.target.value)} rows={3}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 14.5, color: 'var(--text-primary)', lineHeight: 1.65, fontWeight: 500, fontFamily: 'var(--font-body)', padding: 0 }} />
                 </OutputSection>
               )}
 
-              {/* Caption — always shown for non-complex formats */}
+              {/* Caption */}
               {output.caption && (
-                <OutputSection icon={MessageSquare} label="Caption" color="var(--blue)" extra={<CopyBtn text={output.caption} />}>
-                  <p style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{output.caption}</p>
+                <OutputSection icon={MessageSquare} label="Caption" color="var(--blue)" extra={<CopyBtn text={editCaption} />}>
+                  <textarea value={editCaption} onChange={e => setEditCaption(e.target.value)} rows={5}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.75, fontFamily: 'var(--font-body)', padding: 0 }} />
                 </OutputSection>
               )}
 
               {/* CTA + Hashtags */}
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
-                <OutputSection icon={ArrowRight} label="CTA Options" color="var(--green)" extra={undefined}>
+                <OutputSection icon={ArrowRight} label="CTA Options" color="var(--green)"
+                  extra={<button onClick={() => setEditCtaOptions(p => [...p, ''])} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>+ Add</button>}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {output.cta_options?.map((cta, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 10px', background: 'var(--surface-2)', borderRadius: 7, border: '1px solid var(--border)', fontSize: 13 }}>
-                        <span style={{ color: 'var(--text-primary)' }}>{cta}</span><CopyBtn text={cta} />
+                    {editCtaOptions.map((cta, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input value={cta} onChange={e => setEditCtaOptions(p => p.map((c, j) => j === i ? e.target.value : c))}
+                          style={{ flex: 1, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none' }}
+                          onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                          onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                        <CopyBtn text={cta} />
+                        <button onClick={() => setEditCtaOptions(p => p.filter((_, j) => j !== i))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 4, lineHeight: 1 }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}>
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     ))}
                   </div>
                 </OutputSection>
-                <OutputSection icon={Hash} label="Hashtag Pack" color="var(--amber)" extra={<CopyBtn text={output.hashtag_pack?.join(' ') || ''} />}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {output.hashtag_pack?.map((tag, i) => (
-                      <span key={i} style={{ fontSize: 12.5, padding: '3px 9px', borderRadius: 20, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'var(--amber)' }}>{tag}</span>
-                    ))}
-                  </div>
+                <OutputSection icon={Hash} label="Hashtag Pack" color="var(--amber)" extra={<CopyBtn text={editHashtags} />}>
+                  <textarea value={editHashtags} onChange={e => setEditHashtags(e.target.value)} rows={4}
+                    placeholder="#tag1 #tag2 #tag3…"
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 13, color: 'var(--amber)', lineHeight: 1.7, fontFamily: 'var(--font-body)', padding: 0 }} />
                 </OutputSection>
               </div>
 
               {output.visual_direction && (
-                <OutputSection icon={Image} label="Visual Direction" color="var(--text-secondary)" extra={<CopyBtn text={output.visual_direction} />}>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, fontStyle: 'italic' }}>{output.visual_direction}</p>
+                <OutputSection icon={Image} label="Visual Direction" color="var(--text-secondary)" extra={<CopyBtn text={editVisualDirection} />}>
+                  <textarea value={editVisualDirection} onChange={e => setEditVisualDirection(e.target.value)} rows={3}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, fontStyle: 'italic', fontFamily: 'var(--font-body)', padding: 0 }} />
                 </OutputSection>
               )}
               {output.rationale && (
                 <OutputSection icon={Info} label="Rationale" color="var(--text-tertiary)" extra={undefined}>
-                  <p style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.65 }}>{output.rationale}</p>
+                  <textarea value={editRationale} onChange={e => setEditRationale(e.target.value)} rows={3}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.65, fontFamily: 'var(--font-body)', padding: 0 }} />
                 </OutputSection>
               )}
 

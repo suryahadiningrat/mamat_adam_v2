@@ -28,6 +28,7 @@ const formatColors: Record<string, string> = {
 
 type Topic = {
   id?: string
+  product_id?: string
   content_title: string
   content_pillar: string
   content_format: string
@@ -79,12 +80,15 @@ export default function TopicsPage() {
 
   const [form, setForm] = useState({
     brandId: '',
-    productId: '',
+    productMode: 'general' as 'general' | 'mixed' | 'specific',
+    selectedProductIds: [] as string[],
     platform: 'Instagram',
     objective: '',
     count: 10,
     dateFrom: new Date().toISOString().split('T')[0],
     dateTo: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    context: '',
+    referenceUrl: '',
   })
 
   const [topics, setTopics] = useState<Topic[]>([])
@@ -110,7 +114,6 @@ export default function TopicsPage() {
 
   const selectedBrand = brands.find(b => b.id === form.brandId)
   const availableProducts = products.filter(p => p.brand_id === form.brandId)
-  const selectedProduct = availableProducts.find(p => p.id === form.productId)
   const ext = parseExt(selectedBrand?.brand_brain_versions?.[0]?.messaging_rules)
   const canGenerate = !!form.brandId && !!form.platform
 
@@ -133,9 +136,12 @@ export default function TopicsPage() {
       marketingStrategy: ext.marketing_strategy,
     }
 
-    const productPayload = selectedProduct && form.productId !== '__general__'
-      ? { name: selectedProduct.name, usp: selectedProduct.product_brain_versions?.[0]?.usp || '' }
-      : null
+    let productsPayload: { id: string; name: string; usp: string }[] | null = null
+    if (form.productMode === 'mixed') {
+      productsPayload = availableProducts.map(p => ({ id: p.id, name: p.name, usp: p.product_brain_versions?.[0]?.usp || '' }))
+    } else if (form.productMode === 'specific' && form.selectedProductIds.length > 0) {
+      productsPayload = availableProducts.filter(p => form.selectedProductIds.includes(p.id)).map(p => ({ id: p.id, name: p.name, usp: p.product_brain_versions?.[0]?.usp || '' }))
+    }
 
     try {
       const res = await fetch('/api/generate-topics', {
@@ -143,11 +149,13 @@ export default function TopicsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brand: brandPayload,
-          product: productPayload,
+          products: productsPayload,
           platform: form.platform,
           count: form.count,
           dateFrom: form.dateFrom,
           dateTo: form.dateTo,
+          context: form.context || undefined,
+          referenceUrl: form.referenceUrl || undefined,
           workspace_id: workspaceId,
         })
       })
@@ -172,7 +180,7 @@ export default function TopicsPage() {
       const rows = toSave.map(t => ({
         workspace_id: workspaceId,
         brand_id: form.brandId,
-        product_id: (form.productId && form.productId !== '__general__') ? form.productId : null,
+        product_id: form.productMode === 'general' ? null : (t.product_id || null),
         content_title: t.content_title,
         content_pillar: t.content_pillar,
         content_format: t.content_format,
@@ -200,6 +208,42 @@ export default function TopicsPage() {
 
   function handleDelete(idx: number) {
     setTopics(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function handleUpdateTopic(idx: number, updates: Partial<Topic>) {
+    setTopics(prev => prev.map((t, i) => i === idx ? { ...t, ...updates } : t))
+  }
+
+  async function handleRegenerateOne(idx: number, revisionContext: string) {
+    if (!selectedBrand) return
+    const brain = selectedBrand.brand_brain_versions?.[0]
+    const brandPayload = {
+      name: selectedBrand.name, industry: ext.industry,
+      toneOfVoice: brain?.tone_of_voice || '', personality: brain?.brand_personality || '',
+      audience: brain?.audience_persona || '', brandSummary: brain?.source_summary || '',
+      contentPillars: ext.content_pillars, socialPlatforms: ext.social_media_platforms, marketingStrategy: ext.marketing_strategy,
+    }
+    let productsPayload: { id: string; name: string; usp: string }[] | null = null
+    if (form.productMode === 'mixed') {
+      productsPayload = availableProducts.map(p => ({ id: p.id, name: p.name, usp: p.product_brain_versions?.[0]?.usp || '' }))
+    } else if (form.productMode === 'specific' && form.selectedProductIds.length > 0) {
+      productsPayload = availableProducts.filter(p => form.selectedProductIds.includes(p.id)).map(p => ({ id: p.id, name: p.name, usp: p.product_brain_versions?.[0]?.usp || '' }))
+    }
+    try {
+      const res = await fetch('/api/generate-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand: brandPayload, products: productsPayload, platform: form.platform,
+          count: 1, dateFrom: topics[idx]?.publish_date || form.dateFrom,
+          dateTo: form.dateTo, context: revisionContext, workspace_id: workspaceId,
+        })
+      })
+      const data = await res.json()
+      if (data.success && data.topics[0]) {
+        setTopics(prev => prev.map((t, i) => i === idx ? { ...data.topics[0], saved: false } : t))
+      }
+    } catch { alert('Regeneration failed') }
   }
 
   const set = (k: string) => (v: any) => setForm(f => ({ ...f, [k]: v }))
@@ -241,7 +285,7 @@ export default function TopicsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Brand *</label>
                 <div style={{ position: 'relative' }}>
-                  <select value={form.brandId} onChange={e => { set('brandId')(e.target.value); set('productId')('') }}
+                  <select value={form.brandId} onChange={e => { set('brandId')(e.target.value); set('selectedProductIds')([]) }}
                     style={{ width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: form.brandId ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none' }}
                     onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'}>
                     <option value="">Select a brand</option>
@@ -251,19 +295,44 @@ export default function TopicsPage() {
                 </div>
               </div>
 
-              {/* Product */}
+              {/* Product Mode */}
               {form.brandId && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Product <span style={{ color: 'var(--text-tertiary)' }}>(optional)</span></label>
-                  <div style={{ position: 'relative' }}>
-                    <select value={form.productId} onChange={e => set('productId')(e.target.value)}
-                      style={{ width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none' }}
-                      onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'}>
-                      <option value="">— Brand-level topics —</option>
-                      {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <ChevronDown size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Product</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(['general', 'mixed', 'specific'] as const).map(mode => (
+                      <button key={mode} onClick={() => set('productMode')(mode)} style={{
+                        flex: 1, padding: '6px 4px', borderRadius: 8, fontSize: 11.5, fontWeight: 500,
+                        cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'all 0.15s', textAlign: 'center',
+                        border: form.productMode === mode ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                        background: form.productMode === mode ? 'rgba(91,71,157,0.12)' : 'var(--surface-3)',
+                        color: form.productMode === mode ? 'var(--accent)' : 'var(--text-secondary)',
+                      }}>
+                        {mode === 'general' ? 'General' : mode === 'mixed' ? 'Mixed' : 'Specific'}
+                      </button>
+                    ))}
                   </div>
+                  {form.productMode === 'mixed' && (
+                    <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                      Topics distributed across all {availableProducts.length} product{availableProducts.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                  {form.productMode === 'specific' && availableProducts.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 140, overflowY: 'auto' }}>
+                      {availableProducts.map(p => {
+                        const checked = form.selectedProductIds.includes(p.id)
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5, color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 6, background: checked ? 'rgba(91,71,157,0.08)' : 'transparent' }}>
+                            <input type="checkbox" checked={checked} onChange={() => {
+                              const ids = checked ? form.selectedProductIds.filter(id => id !== p.id) : [...form.selectedProductIds, p.id]
+                              set('selectedProductIds')(ids)
+                            }} style={{ accentColor: 'var(--accent)', width: 13, height: 13, cursor: 'pointer', flexShrink: 0 }} />
+                            {p.name}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -338,11 +407,46 @@ export default function TopicsPage() {
                 <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
                   Number of topics: <strong style={{ color: 'var(--text-primary)' }}>{form.count}</strong>
                 </label>
-                <input type="range" min={5} max={30} step={5} value={form.count} onChange={e => set('count')(Number(e.target.value))}
+                <input type="range" min={1} max={30} step={1} value={form.count} onChange={e => set('count')(Number(e.target.value))}
                   style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-tertiary)' }}>
-                  <span>5</span><span>15</span><span>30</span>
+                  <span>1</span><span>15</span><span>30</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Context */}
+          <div className="panel fade-up fade-up-5">
+            <div className="panel-header">
+              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <ChevronDown size={14} style={{ color: 'var(--text-secondary)' }} /> Additional Context <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
+              </span>
+            </div>
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Direction / notes</label>
+                <textarea
+                  value={form.context}
+                  onChange={e => set('context')(e.target.value)}
+                  placeholder="E.g. Focus on upcoming Ramadan campaign, avoid competitor mentions…"
+                  rows={3}
+                  style={{ resize: 'vertical', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', width: '100%', lineHeight: 1.5 }}
+                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
+                <input
+                  type="url"
+                  value={form.referenceUrl}
+                  onChange={e => set('referenceUrl')(e.target.value)}
+                  placeholder="https://…"
+                  style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', width: '100%' }}
+                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                />
               </div>
             </div>
           </div>
@@ -368,20 +472,19 @@ export default function TopicsPage() {
             </div>
           ) : topics.length > 0 ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   <strong style={{ color: 'var(--text-primary)' }}>{topics.length}</strong> topics for {selectedBrand?.name} · {form.platform}
-                  {selectedProduct ? ` · ${selectedProduct.name}` : ''}
+                  {form.productMode === 'mixed' ? ' · Mixed products' : form.productMode === 'specific' && form.selectedProductIds.length > 0 ? ` · ${form.selectedProductIds.length} product${form.selectedProductIds.length > 1 ? 's' : ''}` : ''}
                 </span>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={handleGenerate}>
-                  <RefreshCw size={12} /> Regenerate
-                </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                 {topics.map((topic, idx) => (
                   <TopicCard
                     key={idx} topic={topic} onDelete={() => handleDelete(idx)}
-                    brandId={form.brandId} productId={form.productId}
+                    onUpdate={updates => handleUpdateTopic(idx, updates)}
+                    onRegenerate={ctx => handleRegenerateOne(idx, ctx)}
+                    brandId={form.brandId}
                     platform={form.platform} objective={form.objective}
                   />
                 ))}
@@ -409,22 +512,41 @@ export default function TopicsPage() {
   )
 }
 
-function TopicCard({ topic, onDelete, brandId, productId, platform, objective }: {
+const availableFormats = Object.keys(formatColors)
+
+function TopicCard({ topic, onDelete, onUpdate, onRegenerate, brandId, platform, objective }: {
   topic: Topic; onDelete: () => void
-  brandId: string; productId: string; platform: string; objective: string
+  onUpdate: (updates: Partial<Topic>) => void
+  onRegenerate: (context: string) => Promise<void>
+  brandId: string; platform: string; objective: string
 }) {
+  const [regenOpen, setRegenOpen] = useState(false)
+  const [regenContext, setRegenContext] = useState('')
+  const [regenerating, setRegenerating] = useState(false)
+
   const fmtColor = formatColors[topic.content_format] || '#7c6dfa'
   const pColor = pillarColor(topic.content_pillar || '')
 
   const generateUrl = `/generate?` + new URLSearchParams({
-    topic: topic.content_title,
-    format: topic.content_format || '',
-    pillar: topic.content_pillar || '',
-    platform,
-    brandId,
+    topic: topic.content_title, format: topic.content_format || '',
+    pillar: topic.content_pillar || '', platform, brandId,
     ...(objective ? { objective } : {}),
-    ...(productId && productId !== '__general__' ? { productId } : {})
+    ...(topic.product_id ? { productId: topic.product_id } : {})
   }).toString()
+
+  async function handleRegen() {
+    if (!regenContext.trim()) return
+    setRegenerating(true)
+    await onRegenerate(regenContext)
+    setRegenerating(false)
+    setRegenOpen(false)
+    setRegenContext('')
+  }
+
+  const inputBase: React.CSSProperties = {
+    background: 'transparent', border: 'none', outline: 'none', width: '100%',
+    fontFamily: 'var(--font-body)', color: 'var(--text-primary)', padding: 0,
+  }
 
   return (
     <div style={{
@@ -444,42 +566,113 @@ function TopicCard({ topic, onDelete, brandId, productId, platform, objective }:
         </button>
       )}
 
-      {/* Title */}
-      <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.45, paddingRight: 20, margin: 0 }}>
-        {topic.content_title}
-      </p>
+      {/* Title — editable */}
+      {topic.saved ? (
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.45, paddingRight: 20, margin: 0 }}>
+          {topic.content_title}
+        </p>
+      ) : (
+        <textarea
+          value={topic.content_title}
+          onChange={e => onUpdate({ content_title: e.target.value })}
+          rows={2}
+          style={{ ...inputBase, fontSize: 13.5, fontWeight: 600, lineHeight: 1.45, paddingRight: 20, resize: 'none', overflow: 'hidden' }}
+          onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px' }}
+        />
+      )}
 
-      {/* Meta row */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {/* Meta row — editable */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {/* Pillar */}
-        {topic.content_pillar && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 20, background: `${pColor}18`, border: `1px solid ${pColor}40`, color: pColor, fontWeight: 500 }}>
+        {topic.saved ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 20, background: `${pColor}18`, border: `1px solid ${pColor}40`, color: pColor, fontWeight: 500, width: 'fit-content' }}>
             <Tag size={9} /> {topic.content_pillar}
           </span>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Tag size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            <input value={topic.content_pillar} onChange={e => onUpdate({ content_pillar: e.target.value })}
+              placeholder="Content pillar"
+              style={{ ...inputBase, fontSize: 12, padding: '2px 6px', borderRadius: 6, background: `${pColor}10`, border: `1px solid ${pColor}30`, color: pColor, fontWeight: 500 }} />
+          </div>
         )}
         {/* Format */}
-        {topic.content_format && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 20, background: `${fmtColor}18`, border: `1px solid ${fmtColor}40`, color: fmtColor, fontWeight: 500 }}>
+        {topic.saved ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 20, background: `${fmtColor}18`, border: `1px solid ${fmtColor}40`, color: fmtColor, fontWeight: 500, width: 'fit-content' }}>
             <Layout size={9} /> {topic.content_format}
           </span>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Layout size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            <select value={topic.content_format} onChange={e => onUpdate({ content_format: e.target.value })}
+              style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, background: `${fmtColor}10`, border: `1px solid ${fmtColor}30`, color: fmtColor, fontWeight: 500, fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none', appearance: 'none' }}>
+              {availableFormats.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
         )}
         {/* Date */}
         {topic.publish_date && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 20, background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-tertiary)', fontWeight: 500 }}>
-            <Calendar size={9} /> {new Date(topic.publish_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Calendar size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            {topic.saved ? (
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                {new Date(topic.publish_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+              </span>
+            ) : (
+              <input type="date" value={topic.publish_date} onChange={e => onUpdate({ publish_date: e.target.value })}
+                style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)', outline: 'none' }} />
+            )}
+          </div>
         )}
       </div>
 
-      {/* Generate link */}
+      {/* Actions */}
       {topic.saved ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#10b981' }}>
           <CheckCircle2 size={12} /> Saved to calendar
         </div>
       ) : (
-        <a href={generateUrl} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
-          Generate content <ArrowRight size={11} />
-        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <a href={generateUrl} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
+            Generate <ArrowRight size={11} />
+          </a>
+          <button onClick={() => setRegenOpen(o => !o)} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, background: 'none', border: 'none',
+            color: regenOpen ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', transition: 'color 0.15s'
+          }}>
+            <RefreshCw size={11} /> Regen
+          </button>
+        </div>
+      )}
+
+      {/* Regen panel */}
+      {regenOpen && !topic.saved && (
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <textarea
+            value={regenContext}
+            onChange={e => setRegenContext(e.target.value)}
+            placeholder="What should be different? (e.g. make it more educational, focus on pricing…)"
+            rows={2}
+            autoFocus
+            style={{ fontSize: 12, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 10px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
+            onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+          />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleRegen} disabled={regenerating || !regenContext.trim()} style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              padding: '6px 10px', borderRadius: 7, fontSize: 12, fontWeight: 500, cursor: regenerating || !regenContext.trim() ? 'not-allowed' : 'pointer',
+              background: 'var(--accent)', color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+              opacity: regenerating || !regenContext.trim() ? 0.55 : 1, transition: 'opacity 0.15s'
+            }}>
+              {regenerating ? <><RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> Regenerating…</> : <><RefreshCw size={11} /> Regenerate</>}
+            </button>
+            <button onClick={() => { setRegenOpen(false); setRegenContext('') }} style={{
+              padding: '6px 10px', borderRadius: 7, fontSize: 12, background: 'var(--surface-3)',
+              border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-body)'
+            }}>Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   )
