@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { copywritingSkill, socialContentSkill } from '@/lib/skills'
+import { generateAIContent } from '@/lib/ai'
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,11 +20,6 @@ export async function POST(req: NextRequest) {
 
     if (!brand?.name) {
       return NextResponse.json({ error: 'Brand is required' }, { status: 400 })
-    }
-
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
     }
 
     const fmtArr = (v: any) =>
@@ -111,49 +106,30 @@ Return ONLY valid JSON — no markdown, no explanation:
   ]
 }`
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const aiResult = await generateAIContent({
+      systemPrompts: [],
+      userPrompt: prompt,
+      workspace_id,
+      useHaiku: true,
+      maxTokens: 4000
     })
 
-    if (!response.ok) {
-      const err = await response.json()
-      return NextResponse.json({ error: err.error?.message || 'Generation failed' }, { status: response.status })
+    if (!aiResult.success) {
+      return NextResponse.json({ error: aiResult.error || 'Generation failed' }, { status: 500 })
     }
-
-    const data = await response.json()
-    const rawText = data.content?.[0]?.text || '{}'
 
     let parsed: { topics: any[] }
     try {
-      const clean = rawText.replace(/```json\n?|```\n?/g, '').trim()
+      const clean = aiResult.text.replace(/```json\n?|```\n?/g, '').trim()
       parsed = JSON.parse(clean)
     } catch {
-      return NextResponse.json({ error: 'Failed to parse AI response', raw: rawText }, { status: 500 })
-    }
-
-    // Track cost
-    const inTokens = data.usage?.input_tokens || 0
-    const outTokens = data.usage?.output_tokens || 0
-    const totalCost = (inTokens / 1000000) * 0.80 + (outTokens / 1000000) * 4.00
-
-    if (workspace_id && totalCost > 0) {
-      await supabase.rpc('increment_api_usage', { p_workspace_id: workspace_id, p_amount: totalCost })
+      return NextResponse.json({ error: 'Failed to parse AI response', raw: aiResult.text }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
       topics: parsed.topics || [],
-      usage: { input_tokens: inTokens, output_tokens: outTokens, cost_usd: totalCost }
+      usage: aiResult.usage
     })
 
   } catch (error) {

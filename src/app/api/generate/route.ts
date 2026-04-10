@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { copywritingSkill, socialContentSkill } from '@/lib/skills'
+import { generateAIContent } from '@/lib/ai'
 
 
 // FCE Base System Prompt — keep this static so it gets cached by Anthropic
@@ -174,87 +174,30 @@ ${referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
 Return ONLY this JSON structure:
 ${schema}`
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        system: [
-          {
-            type: 'text',
-            text: FCE_SYSTEM_PROMPT,
-            cache_control: { type: 'ephemeral' }
-          },
-          {
-            type: 'text',
-            text: brandContext,
-            cache_control: { type: 'ephemeral' }
-          }
-        ],
-        messages: [
-          { role: 'user', content: userPrompt }
-        ]
-      })
+    const aiResult = await generateAIContent({
+      systemPrompts: [FCE_SYSTEM_PROMPT, brandContext],
+      userPrompt,
+      workspace_id,
+      maxTokens: 2000
     })
 
-    if (!response.ok) {
-      const err = await response.json()
-      return NextResponse.json({ error: err.error?.message || 'Generation failed' }, { status: response.status })
+    if (!aiResult.success) {
+      return NextResponse.json({ error: aiResult.error || 'Generation failed' }, { status: 500 })
     }
-
-    const data = await response.json()
-    const rawText = data.content?.[0]?.text || '{}'
 
     // Parse the JSON response
     let parsed
     try {
-      const clean = rawText.replace(/```json\n?|```\n?/g, '').trim()
+      const clean = aiResult.text.replace(/```json\n?|```\n?/g, '').trim()
       parsed = JSON.parse(clean)
     } catch {
-      return NextResponse.json({ error: 'Failed to parse AI response', raw: rawText }, { status: 500 })
-    }
-
-    // Calculate Usage costs
-    const inTokens = data.usage?.input_tokens || 0
-    const outTokens = data.usage?.output_tokens || 0
-    const cacheCreateTokens = data.usage?.cache_creation_input_tokens || 0
-    const cacheReadTokens = data.usage?.cache_read_input_tokens || 0
-
-    const inCost = (inTokens / 1000000) * 3.00
-    const outCost = (outTokens / 1000000) * 15.00
-    const cacheCreateCost = (cacheCreateTokens / 1000000) * 3.75
-    const cacheReadCost = (cacheReadTokens / 1000000) * 0.30
-    const totalCost = inCost + outCost + cacheCreateCost + cacheReadCost
-
-    if (workspace_id && totalCost > 0) {
-      const { error: rpcError } = await supabase.rpc('increment_api_usage', {
-        p_workspace_id: workspace_id,
-        p_amount: totalCost
-      })
-      if (rpcError) console.error('Failed to log API usage:', rpcError)
+      return NextResponse.json({ error: 'Failed to parse AI response', raw: aiResult.text }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
       output: parsed,
-      usage: {
-        input_tokens: inTokens,
-        output_tokens: outTokens,
-        cache_read_input_tokens: data.usage?.cache_read_input_tokens || 0,
-        cache_creation_input_tokens: data.usage?.cache_creation_input_tokens || 0,
-        cost_usd: totalCost
-      }
+      usage: aiResult.usage
     })
 
   } catch (error) {

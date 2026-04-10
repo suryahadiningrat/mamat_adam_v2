@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { generateAIContent } from '@/lib/ai'
 
 const EXTRACTION_PROMPT = `You are a product analyst. Based on the extracted website and social media content below, extract structured product information.
 
@@ -57,43 +58,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not extract meaningful content from the provided URLs.' }, { status: 400 })
     }
 
-    // Send to Claude
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: EXTRACTION_PROMPT + combinedText
-        }]
+    // Send to AI
+      const aiResult = await generateAIContent({
+        systemPrompts: [],
+        userPrompt: EXTRACTION_PROMPT + combinedText,
+        useHaiku: true,
+        maxTokens: 1500
       })
-    })
 
-    if (!response.ok) {
-      return NextResponse.json({ error: 'AI extraction failed' }, { status: 500 })
-    }
+      if (!aiResult.success) {
+        return NextResponse.json({ error: aiResult.error || 'AI extraction failed' }, { status: 500 })
+      }
 
-    const data = await response.json()
-    const rawText = data.content?.[0]?.text || '{}'
+      let parsed
+      try {
+        const clean = aiResult.text.replace(/```json\n?|```\n?/g, '').trim()
+        parsed = JSON.parse(clean)
+      } catch {
+        return NextResponse.json({ error: 'Failed to parse extracted data', raw: aiResult.text }, { status: 500 })
+      }
 
-    let parsed
-    try {
-      const clean = rawText.replace(/```json\n?|```\n?/g, '').trim()
-      parsed = JSON.parse(clean)
-    } catch {
-      return NextResponse.json({ error: 'Failed to parse extracted data' }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, data: parsed })
+      return NextResponse.json({ success: true, data: parsed })
   } catch (error) {
     console.error('Scrape product error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
