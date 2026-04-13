@@ -237,6 +237,8 @@ export default function BrandsPage() {
     }
 
     try {
+      if (!workspaceId) throw new Error("Workspace ID is required")
+
       let brandId = editingBrand?.id
 
       if (editingBrand) {
@@ -257,29 +259,46 @@ export default function BrandsPage() {
           }).eq('id', editingBrand.brain.id)
         } else {
           await supabase.from('brand_brain_versions').insert({
-            brand_id: editingBrand.id, workspace_id: workspaceId, version_no: 1,
-            brand_personality: form.brand_personality, tone_of_voice: form.tone_of_voice,
-            brand_promise: form.brand_promise, brand_values: form.brand_values,
-            audience_persona: form.target_audience, source_summary: form.summary,
-            messaging_rules: messagingRules, status: 'approved'
+            brand_id: editingBrand.id, 
+            workspace_id: workspaceId, 
+            version_no: 1,
+            brand_personality: form.brand_personality, 
+            tone_of_voice: form.tone_of_voice,
+            brand_promise: form.brand_promise, 
+            brand_values: form.brand_values,
+            audience_persona: form.target_audience, 
+            source_summary: form.summary,
+            messaging_rules: messagingRules, 
+            status: 'approved'
           })
         }
       } else {
         const slug = form.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000)
         const { data: bd, error: be } = await supabase.from('brands').insert({
-          workspace_id: workspaceId, name: form.name, slug,
-          category: form.industry || form.category, summary: form.summary, status: 'active'
+          workspace_id: workspaceId, 
+          name: form.name, 
+          slug,
+          category: form.industry || form.category, 
+          summary: form.summary, 
+          status: 'active'
         }).select().single()
         if (be) throw be
         brandId = bd.id
 
-        await supabase.from('brand_brain_versions').insert({
-          brand_id: brandId, workspace_id: workspaceId, version_no: 1,
-          brand_personality: form.brand_personality, tone_of_voice: form.tone_of_voice,
-          brand_promise: form.brand_promise, brand_values: form.brand_values,
-          audience_persona: form.target_audience, source_summary: form.summary,
-          messaging_rules: messagingRules, status: 'approved'
+        const { error: insertBrainError } = await supabase.from('brand_brain_versions').insert({
+          brand_id: brandId, 
+          workspace_id: workspaceId, 
+          version_no: 1,
+          brand_personality: form.brand_personality, 
+          tone_of_voice: form.tone_of_voice,
+          brand_promise: form.brand_promise, 
+          brand_values: form.brand_values,
+          audience_persona: form.target_audience, 
+          source_summary: form.summary,
+          messaging_rules: messagingRules, 
+          status: 'approved'
         })
+        if (insertBrainError) throw insertBrainError
       }
 
       await loadBrands()

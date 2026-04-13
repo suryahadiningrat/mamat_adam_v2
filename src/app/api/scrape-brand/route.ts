@@ -42,10 +42,29 @@ export async function POST(req: NextRequest) {
       try {
         const res = await fetch(jinaUrl, {
           signal: AbortSignal.timeout(15000),
-          headers: { 'X-Return-Format': 'markdown' }
+          headers: { 
+            'X-Return-Format': 'markdown',
+            'Accept': 'application/json' 
+          }
         })
-        if (!res.ok) return `[Failed to fetch ${u} - HTTP ${res.status}]`
-        const text = await res.text()
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          console.error(`Jina Error ${res.status}:`, errText)
+          return `[Failed to fetch ${u} - HTTP ${res.status}]`
+        }
+        
+        let text = await res.text()
+        
+        // Parse Jina JSON response if it's JSON
+        try {
+          const jinaJson = JSON.parse(text)
+          if (jinaJson.data && jinaJson.data.content) {
+            text = jinaJson.data.content
+          }
+        } catch (e) {
+          // If not JSON, assume it's raw markdown
+        }
+        
         return `=== Source: ${u} ===\n${text.slice(0, 8000)}`
       } catch (fetchErr: any) {
         return `[Error fetching ${u}: ${fetchErr.message}]`
