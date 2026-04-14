@@ -220,10 +220,10 @@ export default function CalendarPage() {
                   <div className="relative">
                     <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                     <input 
-                      type="date"
-                      value={selectedItem.date || ''}
-                      onChange={e => setSelectedItem({...selectedItem, date: e.target.value})}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      type="date" 
+                      value={typeof selectedItem.date === 'string' ? selectedItem.date : selectedItem.date instanceof Date ? selectedItem.date.toISOString().split('T')[0] : ''} 
+                      onChange={e => setSelectedItem({...selectedItem, date: e.target.value})} 
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
                     />
                   </div>
                 </div>

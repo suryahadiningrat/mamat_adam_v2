@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Megaphone, Plus, Brain, Package, Target, Calendar,
@@ -55,29 +54,39 @@ function CampaignsContent() {
     const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
-    const [brandsRes, productsRes, campaignsRes] = await Promise.all([
-      supabase.from('brands').select('id, name, category, brand_brain_versions(brand_personality, tone_of_voice, brand_promise, target_audience)').eq('workspace_id', wsId).order('name'),
-      supabase.from('products').select('id, name, brand_id, product_brain_versions(usp, emotional_benefits, target_audience)').eq('workspace_id', wsId).order('name'),
-      supabase.from('campaigns').select(`id, name, objective, status, created_at, brands(name), products(name), campaign_outputs(big_idea, campaign_theme, status)`).eq('workspace_id', wsId).order('created_at', { ascending: false })
-    ])
+    try {
+      const [brandsRes, productsRes, campaignsRes] = await Promise.all([
+        fetch(`/api/brands?workspaceId=${wsId}`),
+        fetch(`/api/products?workspaceId=${wsId}`),
+        fetch(`/api/campaigns?workspaceId=${wsId}`)
+      ])
 
-    if (brandsRes.data) {
-      const parsedBrands = brandsRes.data.map((b: any) => ({ ...b, brain: b.brand_brain_versions?.[0] }))
-      setBrands(parsedBrands)
-      if (preselectedBrandId) {
-        const match = parsedBrands.find((b: any) => b.id === preselectedBrandId)
-        if (match) setSelectedBrand(match)
+      if (brandsRes.ok) {
+        const parsedBrands = await brandsRes.json()
+        setBrands(parsedBrands)
+        if (preselectedBrandId) {
+          const match = parsedBrands.find((b: any) => b.id === preselectedBrandId)
+          if (match) setSelectedBrand(match)
+        }
       }
-    }
-    if (productsRes.data) {
-      const parsedProducts = productsRes.data.map((p: any) => ({ ...p, brain: p.product_brain_versions?.[0] }))
-      setProducts(parsedProducts)
-      if (preselectedProductId) {
-        const match = parsedProducts.find((p: any) => p.id === preselectedProductId)
-        if (match) setSelectedProduct(match)
+      
+      if (productsRes.ok) {
+        const parsedProducts = await productsRes.json()
+        setProducts(parsedProducts)
+        if (preselectedProductId) {
+          const match = parsedProducts.find((p: any) => p.id === preselectedProductId)
+          if (match) setSelectedProduct(match)
+        }
       }
+
+      if (campaignsRes.ok) {
+        const campaignsData = await campaignsRes.json()
+        setCampaigns(campaignsData)
+      }
+    } catch (err) {
+      console.error(err)
     }
-    if (campaignsRes.data) setCampaigns(campaignsRes.data)
+
     setLoading(false)
   }
 
@@ -151,8 +160,8 @@ function CampaignsContent() {
     if (!output || !selectedBrand || !selectedProduct) return
     setSaving(true)
     try {
-      const { data: campaignData, error: campaignErr } = await supabase.from('campaigns').insert({
-        workspace_id: workspaceId,
+      const payload = {
+        workspaceId,
         brand_id: selectedBrand.id,
         product_id: selectedProduct.id,
         name: form.name,
@@ -164,25 +173,16 @@ function CampaignsContent() {
         key_message: form.keyMessage,
         channel_mix: form.channelMix,
         cultural_context: form.culturalContext,
-        status: 'draft'
-      }).select().single()
+        output
+      }
 
-      if (campaignErr) throw campaignErr
-
-      await supabase.from('campaign_outputs').insert({
-        campaign_id: campaignData.id,
-        version_no: 1,
-        big_idea: output.big_idea,
-        campaign_theme: output.campaign_theme,
-        message_pillars: output.message_pillars,
-        audience_insight: output.audience_insight,
-        funnel_journey: output.funnel_journey,
-        channel_role_mapping: output.channel_role_mapping,
-        deliverables_recommendation: output.deliverables_recommendation,
-        kpi_recommendation: output.kpi_recommendation,
-        rationale: output.rationale,
-        status: 'draft'
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       })
+
+      if (!res.ok) throw new Error('Failed to save campaign')
 
       setSaved(true)
       await loadData()

@@ -1,5 +1,3 @@
-import { supabase } from '@/lib/supabase'
-
 export interface AIGenerationOptions {
   systemPrompts: string[]
   userPrompt: string
@@ -86,7 +84,11 @@ async function generateWithLocalAI({ systemPrompts, userPrompt, maxTokens }: Omi
     }
   } catch (error: any) {
     console.error('Local AI Error:', error)
-    return { success: false, text: '', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: 0 }, error: error.message }
+    let errMsg = error.message
+    if (errMsg === 'fetch failed' || errMsg.includes('timeout') || errMsg.includes('ECONNREFUSED')) {
+      errMsg = `Koneksi ke Local AI gagal (${baseUrl}). Pastikan LM Studio sedang berjalan dan dapat diakses dari jaringan.`
+    }
+    return { success: false, text: '', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: 0 }, error: errMsg }
   }
 }
 
@@ -152,11 +154,16 @@ async function generateWithAnthropic({ systemPrompts, userPrompt, workspace_id, 
     const totalCost = inCost + outCost + cacheCreateCost + cacheReadCost
 
     if (workspace_id && totalCost > 0) {
-      const { error: rpcError } = await supabase.rpc('increment_api_usage', {
-        p_workspace_id: workspace_id,
-        p_amount: totalCost
-      })
-      if (rpcError) console.error('Failed to log API usage:', rpcError)
+      try {
+        const res = await fetch(`${process.env.NEXTAUTH_URL}/api/workspaces/${workspace_id}/usage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: totalCost })
+        })
+        if (!res.ok) console.error('Failed to log API usage')
+      } catch (err) {
+        console.error('Error logging API usage:', err)
+      }
     }
 
     return {

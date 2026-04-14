@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useSession, signOut } from 'next-auth/react'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   LayoutDashboard, Brain, Package, Zap, Megaphone,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 
 export default function Sidebar() {
+  const { data: session } = useSession()
   const { activeWorkspace, workspaces, workspaceId, switchWorkspace, createWorkspace } = useWorkspace()
 
   const [usage, setUsage] = useState({ used: 0, limit: 20 })
@@ -54,61 +55,39 @@ export default function Sidebar() {
   // Load usage + counts whenever active workspace changes
   useEffect(() => {
     if (!workspaceId) return
-    let sub: any = null
 
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!session?.user) return
 
-      const { data: profile } = await supabase.from('user_profiles').select('full_name, is_superadmin').eq('id', user.id).single()
-      if (profile?.full_name) {
-        setUserName(profile.full_name)
-        setInitials(profile.full_name.substring(0, 1).toUpperCase())
-      } else if (user.email) {
-        setUserName(user.email)
-        setInitials(user.email.substring(0, 1).toUpperCase())
+      setUserName(session.user.name || session.user.email || 'User')
+      setInitials((session.user.name || session.user.email || 'U').substring(0, 1).toUpperCase())
+
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}/stats`)
+        if (res.ok) {
+          const data = await res.json()
+          setIsSuperadmin(data.isSuperadmin || false)
+          setUsage({ used: data.usage.used || 0, limit: data.usage.limit || 20 })
+          setCounts({
+            brands: data.counts.brands || 0,
+            products: data.counts.products || 0,
+            library: data.counts.library || 0,
+            topics: data.counts.topics || 0,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load workspace stats:', err)
       }
-      if (profile?.is_superadmin) setIsSuperadmin(true)
-
-      const [wsRes, brandsRes, productsRes, libraryRes, topicsRes] = await Promise.all([
-        supabase.from('workspaces').select('api_usage_usd, api_limit_usd').eq('id', workspaceId).single(),
-        supabase.from('brands').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
-        supabase.from('products').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
-        supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
-        supabase.from('content_topics').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
-      ])
-
-      if (wsRes.data) {
-        setUsage({ used: wsRes.data.api_usage_usd || 0, limit: wsRes.data.api_limit_usd || 20 })
-      }
-
-      setCounts({
-        brands: brandsRes.count ?? 0,
-        products: productsRes.count ?? 0,
-        library: libraryRes.count ?? 0,
-        topics: topicsRes.count ?? 0,
-      })
-
-      sub = supabase.channel(`ws-usage-${workspaceId}`)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'workspaces', filter: `id=eq.${workspaceId}` }, (payload) => {
-          const newU = payload.new.api_usage_usd
-          const newL = payload.new.api_limit_usd
-          if (newU !== undefined && newL !== undefined) {
-            setUsage({ used: newU, limit: newL })
-          }
-        })
-        .subscribe()
     }
 
     loadData()
-    return () => { if (sub) supabase.removeChannel(sub) }
-  }, [workspaceId])
+  }, [workspaceId, session])
 
   const usagePct = usage.limit > 0 ? Math.min((usage.used / usage.limit) * 100, 100) : 0
   const isDanger = usagePct > 90
   const fillClass = isDanger ? 'red' : usagePct > 70 ? 'amber' : 'green'
 
-  const handleLogout = async () => { await supabase.auth.signOut() }
+  const handleLogout = async () => { await signOut({ callbackUrl: '/login' }) }
 
   async function handleCreateWorkspace(e: React.FormEvent) {
     e.preventDefault()

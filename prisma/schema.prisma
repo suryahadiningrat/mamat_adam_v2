@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  full_name     String?
+  avatar_url    String?
+  status        String    @default("active") // active, archived
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
+
+  workspaces_created Workspace[] @relation("WorkspaceCreator")
+  workspace_roles    UserWorkspaceRole[]
+  brands_created     Brand[]     @relation("BrandCreator")
+  products_created   Product[]   @relation("ProductCreator")
+  campaigns_created  Campaign[]  @relation("CampaignCreator")
+}
+
+model Workspace {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  logo_url      String?
+  avatar_color  String?
+  avatar_emoji  String?
+  api_usage_usd Float     @default(0)
+  api_limit_usd Float     @default(20)
+  status        String    @default("active") // active, archived
+  created_by    String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
+
+  creator       User?     @relation("WorkspaceCreator", fields: [created_by], references: [id])
+  users         UserWorkspaceRole[]
+  brands        Brand[]
+  products      Product[]
+  campaigns     Campaign[]
+  invitations   WorkspaceInvitation[]
+  calendarItems CalendarItem[]
+}
+
+model UserWorkspaceRole {
+  id           String    @id @default(uuid())
+  workspace_id String
+  user_id      String
+  role         String    @default("editor") // admin, editor, viewer
+  created_at   DateTime  @default(now())
+
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, user_id])
+}
+
+model WorkspaceInvitation {
+  id            String    @id @default(uuid())
+  workspace_id  String
+  invited_email String
+  role          String    @default("editor")
+  status        String    @default("pending") // pending, accepted, expired
+  invited_by    String?
+  created_at    DateTime  @default(now())
+
+  workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+}
+
+model Brand {
+  id                       String    @id @default(uuid())
+  workspace_id             String
+  name                     String
+  slug                     String
+  category                 String?
+  summary                  String?
+  status                   String    @default("draft") // draft, active, archived
+  current_brain_version_id String?
+  created_by               String?
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @default(now()) @updatedAt
+
+  workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  creator       User?     @relation("BrandCreator", fields: [created_by], references: [id])
+  products      Product[]
+  brainVersions BrandBrainVersion[]
+  campaigns     Campaign[]
+
+  @@unique([workspace_id, slug])
+}
+
+model BrandBrainVersion {
+  id                       String    @id @default(uuid())
+  brand_id                 String
+  workspace_id             String?
+  version_no               Int       @default(1)
+  brand_personality        String?
+  tone_of_voice            String?
+  audience_persona         Json?
+  brand_values             Json?
+  brand_promise            String?
+  messaging_rules          Json?
+  vocabulary_whitelist     Json?
+  vocabulary_blacklist     Json?
+  visual_direction_notes   String?
+  cultural_relevance_notes String?
+  source_summary           String?
+  status                   String    @default("draft") // draft, approved, archived
+  created_by               String?
+  approved_by              String?
+  created_at               DateTime  @default(now())
+  approved_at              DateTime?
+
+  brand         Brand     @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id                       String    @id @default(uuid())
+  workspace_id             String
+  brand_id                 String
+  name                     String
+  slug                     String
+  image_url                String?
+  product_type             String?
+  summary                  String?
+  status                   String    @default("draft") // draft, active, archived
+  current_brain_version_id String?
+  created_by               String?
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @default(now()) @updatedAt
+
+  workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  brand         Brand     @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+  creator       User?     @relation("ProductCreator", fields: [created_by], references: [id])
+  brainVersions ProductBrainVersion[]
+  campaigns     Campaign[]
+}
+
+model ProductBrainVersion {
+  id                    String    @id @default(uuid())
+  product_id            String
+  brand_id              String?
+  workspace_id          String?
+  version_no            Int       @default(1)
+  usp                   String?
+  rtb                   String?
+  functional_benefits   Json?
+  emotional_benefits    Json?
+  target_audience       String?
+  price_tier            String?
+  key_claims            Json?
+  mandatory_disclaimers String?
+  platform_relevance    Json?
+  content_angles        Json?
+  objection_handling    Json?
+  status                String    @default("draft")
+  created_by            String?
+  created_at            DateTime  @default(now())
+
+  product       Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id               String    @id @default(uuid())
+  workspace_id     String
+  brand_id         String?
+  product_id       String?
+  name             String
+  objective        String?
+  audience_segment String?
+  flight_start     DateTime? @db.Date
+  flight_end       DateTime? @db.Date
+  budget_range     String?
+  key_message      String?
+  channel_mix      Json?
+  cultural_context String?
+  status           String    @default("draft")
+  created_by       String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+
+  workspace       Workspace         @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  brand           Brand?            @relation(fields: [brand_id], references: [id])
+  product         Product?          @relation(fields: [product_id], references: [id])
+  creator         User?             @relation("CampaignCreator", fields: [created_by], references: [id])
+  calendarItems   CalendarItem[]
+  campaignOutputs CampaignOutput[]
+}
+
+model CampaignOutput {
+  id                          String    @id @default(uuid())
+  campaign_id                 String
+  version_no                  Int       @default(1)
+  big_idea                    String?
+  campaign_theme              String?
+  message_pillars             Json?
+  audience_insight            String?
+  funnel_journey              Json?
+  channel_role_mapping        Json?
+  deliverables_recommendation Json?
+  kpi_recommendation          Json?
+  rationale                   String?
+  status                      String    @default("draft")
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @default(now()) @updatedAt
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+}
+
+model CalendarItem {
+  id           String    @id @default(uuid())
+  workspace_id String
+  campaign_id  String?
+  title        String
+  date         DateTime  @db.Date
+  channel      String?
+  format       String?
+  status       String    @default("draft")
+  owner_id     String?
+  created_by   String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now()) @updatedAt
+
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  campaign     Campaign? @relation(fields: [campaign_id], references: [id])
+}

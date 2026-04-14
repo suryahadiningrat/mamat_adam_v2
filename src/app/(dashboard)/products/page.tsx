@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud, Sparkles } from 'lucide-react'
 
@@ -106,21 +105,19 @@ export default function ProductsPage() {
     setUploadingImage(true)
     setErrorMsg('')
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`
-      const filePath = `${workspaceId}/${fileName}`
-      
-      const { error: uploadError } = await supabase.storage
-        .from('product_images')
-        .upload(filePath, file)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('workspaceId', workspaceId)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
         
-      if (uploadError) throw uploadError
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('product_images')
-        .getPublicUrl(filePath)
-        
-      setFormData(prev => ({ ...prev, image_url: publicUrl }))
+      setFormData(prev => ({ ...prev, image_url: data.url }))
     } catch (err: any) {
       setErrorMsg(err.message || 'Error uploading image')
     } finally {
@@ -137,34 +134,23 @@ export default function ProductsPage() {
     const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
-    const [{ data: brandsData }, { data: productsData }] = await Promise.all([
-      supabase.from('brands').select('id, name').eq('workspace_id', wsId).order('name'),
-      supabase.from('products').select(`
-        id, name, slug, image_url, product_type, summary, brand_id,
-        brands ( id, name ),
-        product_brain_versions (
-          id, usp, rtb, functional_benefits, emotional_benefits, target_audience, price_tier
-        )
-      `).eq('workspace_id', wsId).order('created_at', { ascending: false })
-    ])
+    try {
+      const [brandsRes, productsRes] = await Promise.all([
+        fetch(`/api/brands?workspaceId=${wsId}`),
+        fetch(`/api/products?workspaceId=${wsId}`)
+      ])
 
-    if (brandsData) setBrands(brandsData)
+      if (brandsRes.ok) {
+        const brandsData = await brandsRes.json()
+        setBrands(brandsData)
+      }
 
-    if (productsData) {
-      const parsed = productsData.map((p: any) => ({
-        ...p,
-        brand: Array.isArray(p.brands) ? p.brands[0] : p.brands,
-        brain: p.product_brain_versions?.[0] ? {
-          ...p.product_brain_versions[0],
-          functional_benefits: typeof p.product_brain_versions[0].functional_benefits === 'string'
-            ? p.product_brain_versions[0].functional_benefits
-            : JSON.stringify(p.product_brain_versions[0].functional_benefits || []),
-          emotional_benefits: typeof p.product_brain_versions[0].emotional_benefits === 'string'
-            ? p.product_brain_versions[0].emotional_benefits
-            : JSON.stringify(p.product_brain_versions[0].emotional_benefits || []),
-        } : undefined
-      }))
-      setProducts(parsed)
+      if (productsRes.ok) {
+        const productsData = await productsRes.json()
+        setProducts(productsData)
+      }
+    } catch (err) {
+      console.error(err)
     }
 
     setLoading(false)
@@ -214,69 +200,36 @@ export default function ProductsPage() {
     try {
       let currentProductId = editingProduct?.id
 
+      const payload = {
+        workspaceId,
+        brand_id: formData.brand_id,
+        name: formData.name,
+        image_url: formData.image_url,
+        product_type: formData.product_type,
+        summary: formData.summary,
+        usp: formData.usp,
+        rtb: formData.rtb,
+        functional_benefits: parsedFunctional,
+        emotional_benefits: parsedEmotional,
+        target_audience: formData.target_audience,
+        price_tier: formData.price_tier,
+        brainId: editingProduct?.brain?.id
+      }
+
       if (editingProduct) {
-        await supabase.from('products').update({
-          name: formData.name,
-          image_url: formData.image_url,
-          product_type: formData.product_type,
-          summary: formData.summary,
-          brand_id: formData.brand_id,
-          updated_at: new Date().toISOString()
-        }).eq('id', editingProduct.id)
-
-        if (editingProduct.brain) {
-          await supabase.from('product_brain_versions').update({
-            usp: formData.usp,
-            rtb: formData.rtb,
-            functional_benefits: parsedFunctional,
-            emotional_benefits: parsedEmotional,
-            target_audience: formData.target_audience,
-            price_tier: formData.price_tier
-          }).eq('id', editingProduct.brain.id)
-        } else {
-          await supabase.from('product_brain_versions').insert({
-            product_id: editingProduct.id,
-            brand_id: formData.brand_id,
-            workspace_id: workspaceId,
-            version_no: 1,
-            usp: formData.usp,
-            rtb: formData.rtb,
-            functional_benefits: parsedFunctional,
-            emotional_benefits: parsedEmotional,
-            target_audience: formData.target_audience,
-            price_tier: formData.price_tier,
-            status: 'approved'
-          })
-        }
-      } else {
-        const slug = formData.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000)
-        const { data: productData, error: productErr } = await supabase.from('products').insert({
-          workspace_id: workspaceId,
-          brand_id: formData.brand_id,
-          name: formData.name,
-          slug,
-          image_url: formData.image_url,
-          product_type: formData.product_type,
-          summary: formData.summary,
-          status: 'active'
-        }).select().single()
-
-        if (productErr) throw productErr
-        currentProductId = productData.id
-
-        await supabase.from('product_brain_versions').insert({
-          product_id: currentProductId,
-          brand_id: formData.brand_id,
-          workspace_id: workspaceId,
-          version_no: 1,
-          usp: formData.usp,
-          rtb: formData.rtb,
-          functional_benefits: parsedFunctional,
-          emotional_benefits: parsedEmotional,
-          target_audience: formData.target_audience,
-          price_tier: formData.price_tier,
-          status: 'approved'
+        const res = await fetch(`/api/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         })
+        if (!res.ok) throw new Error('Failed to update product')
+      } else {
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (!res.ok) throw new Error('Failed to create product')
       }
 
       await loadData()
@@ -290,8 +243,15 @@ export default function ProductsPage() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm('Delete this product? This will also remove all associated content requests.')) return
-    await supabase.from('products').delete().eq('id', id)
-    setProducts(products.filter(p => p.id !== id))
+    
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete product')
+      setProducts(products.filter(p => p.id !== id))
+    } catch (err) {
+      console.error(err)
+      alert('Error deleting product')
+    }
   }
 
   return (

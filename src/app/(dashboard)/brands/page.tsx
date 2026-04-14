@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Brain, Plus, Trash2, X, Save, AlertCircle, Globe, Sparkles,
@@ -87,26 +86,13 @@ export default function BrandsPage() {
     const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
-    // Heal orphaned brands (workspace_id = null) from before workspace setup
-    await supabase.from('brands').update({ workspace_id: wsId }).is('workspace_id', null)
-
-    const { data, error } = await supabase
-      .from('brands')
-      .select(`
-        id, name, slug, category, summary,
-        brand_brain_versions (
-          id, brand_personality, tone_of_voice, brand_promise,
-          brand_values, audience_persona, source_summary, messaging_rules
-        )
-      `)
-      .eq('workspace_id', wsId)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      setBrands(data.map((b: any) => ({
-        ...b,
-        brain: b.brand_brain_versions?.[0] ?? undefined
-      })))
+    try {
+      const res = await fetch(`/api/brands?workspaceId=${wsId}`)
+      if (!res.ok) throw new Error('Failed to fetch brands')
+      const data = await res.json()
+      setBrands(data)
+    } catch (err) {
+      console.error(err)
     }
     setLoading(false)
   }
@@ -239,66 +225,34 @@ export default function BrandsPage() {
     try {
       if (!workspaceId) throw new Error("Workspace ID is required")
 
-      let brandId = editingBrand?.id
+      const payload = {
+        workspaceId,
+        name: form.name,
+        category: form.industry || form.category,
+        summary: form.summary,
+        brand_personality: form.brand_personality,
+        tone_of_voice: form.tone_of_voice,
+        brand_promise: form.brand_promise,
+        brand_values: form.brand_values,
+        audience_persona: form.target_audience,
+        messaging_rules: messagingRules,
+        brainId: editingBrand?.brain?.id
+      }
 
       if (editingBrand) {
-        await supabase.from('brands').update({
-          name: form.name, category: form.industry || form.category,
-          summary: form.summary, updated_at: new Date().toISOString()
-        }).eq('id', editingBrand.id)
-
-        if (editingBrand.brain) {
-          await supabase.from('brand_brain_versions').update({
-            brand_personality: form.brand_personality,
-            tone_of_voice: form.tone_of_voice,
-            brand_promise: form.brand_promise,
-            brand_values: form.brand_values,
-            audience_persona: form.target_audience,
-            source_summary: form.summary,
-            messaging_rules: messagingRules,
-          }).eq('id', editingBrand.brain.id)
-        } else {
-          await supabase.from('brand_brain_versions').insert({
-            brand_id: editingBrand.id, 
-            workspace_id: workspaceId, 
-            version_no: 1,
-            brand_personality: form.brand_personality, 
-            tone_of_voice: form.tone_of_voice,
-            brand_promise: form.brand_promise, 
-            brand_values: form.brand_values,
-            audience_persona: form.target_audience, 
-            source_summary: form.summary,
-            messaging_rules: messagingRules, 
-            status: 'approved'
-          })
-        }
-      } else {
-        const slug = form.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000)
-        const { data: bd, error: be } = await supabase.from('brands').insert({
-          workspace_id: workspaceId, 
-          name: form.name, 
-          slug,
-          category: form.industry || form.category, 
-          summary: form.summary, 
-          status: 'active'
-        }).select().single()
-        if (be) throw be
-        brandId = bd.id
-
-        const { error: insertBrainError } = await supabase.from('brand_brain_versions').insert({
-          brand_id: brandId, 
-          workspace_id: workspaceId, 
-          version_no: 1,
-          brand_personality: form.brand_personality, 
-          tone_of_voice: form.tone_of_voice,
-          brand_promise: form.brand_promise, 
-          brand_values: form.brand_values,
-          audience_persona: form.target_audience, 
-          source_summary: form.summary,
-          messaging_rules: messagingRules, 
-          status: 'approved'
+        const res = await fetch(`/api/brands/${editingBrand.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         })
-        if (insertBrainError) throw insertBrainError
+        if (!res.ok) throw new Error('Failed to update brand')
+      } else {
+        const res = await fetch('/api/brands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (!res.ok) throw new Error('Failed to create brand')
       }
 
       await loadBrands()
@@ -312,8 +266,15 @@ export default function BrandsPage() {
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Delete this brand? All associated products and content will also be deleted.')) return
-    await supabase.from('brands').delete().eq('id', id)
-    setBrands(brands.filter(b => b.id !== id))
+    
+    try {
+      const res = await fetch(`/api/brands/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete brand')
+      setBrands(brands.filter(b => b.id !== id))
+    } catch (err) {
+      console.error(err)
+      alert('Error deleting brand')
+    }
   }
 
   // Tag helpers

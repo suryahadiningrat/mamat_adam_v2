@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Brain, ArrowLeft, Loader2, Sparkles, CheckCircle2, Mail } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -20,26 +19,18 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: name },
-          emailRedirectTo: `${window.location.origin}/`
-        }
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name })
       })
 
-      if (error) throw error
+      const data = await res.json()
 
-      // If email confirmation is disabled in Supabase, the user is auto-confirmed
-      // and has an active session — redirect straight to the dashboard
-      if (data.session) {
-        router.push('/')
-        return
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to sign up')
 
-      // Otherwise show "check your email" screen
-      setSuccess(true)
+      // Redirect straight to login page so they can use NextAuth credentials
+      router.push('/login')
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up.')
     } finally {

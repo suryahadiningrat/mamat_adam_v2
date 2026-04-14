@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 })
     }
 
+    console.log('aa');
+
     // Fetch all URLs in parallel using Jina Reader to bypass bot blocks and get clean Markdown
     const fetchPromises = urlsToScrape.slice(0, 5).map(async (u: string) => {
       const normalizedUrl = u.startsWith('http') ? u : `https://${u}`

@@ -2,7 +2,7 @@
 import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { signOut } from 'next-auth/react'
 
 export default function Topbar() {
   const { theme, setTheme } = useTheme()
@@ -14,7 +14,7 @@ export default function Topbar() {
   const isDark = theme === 'dark'
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut({ callbackUrl: '/login' })
   }
 
   return (

@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Brain, Package, Zap, Megaphone,
@@ -91,79 +90,37 @@ export default function DashboardPage() {
   }, [workspaceId])
 
   async function loadDashboard() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
     const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
-    // All data in parallel
-    const [
-      profileRes,
-      brandsRes,
-      productsCountRes,
-      generationsCountRes,
-      campaignsCountRes,
-      recentGenRes,
-      libraryRes,
-      brandStatsRes
-    ] = await Promise.all([
-      supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
-      supabase.from('brands').select('id, name, category, status').eq('workspace_id', wsId).order('created_at', { ascending: false }),
-      supabase.from('products').select('id, brand_id').eq('workspace_id', wsId),
-      supabase.from('generation_outputs').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
-      supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('workspace_id', wsId),
-      supabase.from('generation_outputs').select(`
-        id, copy_on_visual, slides, scenes, status, created_at, workspace_id,
-        generation_requests ( platform, framework_id, brand_id, brands ( name ), products ( name ) )
-      `).eq('workspace_id', wsId).order('created_at', { ascending: false }).limit(6),
-      supabase.from('generation_outputs').select('status').eq('workspace_id', wsId),
-      supabase.from('generation_requests').select('brand_id').eq('workspace_id', wsId),
-    ])
+    try {
+      const res = await fetch(`/api/dashboard?workspaceId=${wsId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.user?.full_name) {
+          setUserName(data.user.full_name.split(' ')[0])
+        }
 
-    // User name
-    if (profileRes.data?.full_name) {
-      setUserName(profileRes.data.full_name.split(' ')[0])
+        setKpis({
+          brands: data.brands.length,
+          products: data.productsCount,
+          generations: data.generationsCount,
+          campaigns: data.campaignsCount,
+        })
+
+        setRecentGenerations(data.recentGenerations)
+        setLibraryCounts(data.libraryCounts)
+
+        setBrandsData(data.brands.map((b: any, i: number) => ({
+          ...b,
+          color: brandColors[i % brandColors.length],
+          products: 0, // Placeholder
+          generations: 0, // Placeholder
+        })))
+      }
+    } catch (err) {
+      console.error('Error loading dashboard:', err)
     }
-
-    // KPIs
-    const allBrands = brandsRes.data || []
-    const allProducts = productsCountRes.data || []
-    setKpis({
-      brands: allBrands.length,
-      products: allProducts.length,
-      generations: generationsCountRes.count ?? 0,
-      campaigns: campaignsCountRes.count ?? 0,
-    })
-
-    // Recent generations
-    if (recentGenRes.data) {
-      setRecentGenerations(recentGenRes.data)
-    }
-
-    // Library counts
-    const outputs = libraryRes.data || []
-    setLibraryCounts({
-      approved: outputs.filter((o: any) => o.status === 'approved').length,
-      draft: outputs.filter((o: any) => o.status === 'draft').length,
-      rejected: outputs.filter((o: any) => o.status === 'rejected').length,
-    })
-
-    // Brands with product + output counts
-    const productsByBrand: Record<string, number> = {}
-    allProducts.forEach((p: any) => {
-      productsByBrand[p.brand_id] = (productsByBrand[p.brand_id] || 0) + 1
-    })
-    const outputsByBrand: Record<string, number> = {}
-    ;(brandStatsRes.data || []).forEach((r: any) => {
-      if (r.brand_id) outputsByBrand[r.brand_id] = (outputsByBrand[r.brand_id] || 0) + 1
-    })
-    setBrandsData(allBrands.map((b: any, i: number) => ({
-      ...b,
-      color: brandColors[i % brandColors.length],
-      products: productsByBrand[b.id] || 0,
-      generations: outputsByBrand[b.id] || 0,
-    })))
 
     setLoading(false)
   }

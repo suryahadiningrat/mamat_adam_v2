@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useSession } from 'next-auth/react'
 
 export type WorkspaceBasic = {
   id: string
@@ -40,48 +40,41 @@ export function useWorkspace() {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const { status } = useSession()
   const [workspaces, setWorkspaces] = useState<WorkspaceBasic[]>([])
   const [activeId, setActiveId] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   const loadWorkspaces = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
+    if (status !== 'authenticated') {
+      if (status === 'unauthenticated') setLoading(false)
+      return
+    }
 
-    const { data: roles } = await supabase
-      .from('user_workspace_roles')
-      .select('workspace_id, role, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    try {
+      const res = await fetch('/api/workspaces')
+      if (!res.ok) throw new Error('Failed to fetch workspaces')
+      const list: WorkspaceBasic[] = await res.json()
 
-    if (!roles || roles.length === 0) { setLoading(false); return }
+      if (list.length === 0) {
+        setLoading(false)
+        return
+      }
 
-    const wsIds = roles.map(r => r.workspace_id)
-    const { data: wsData } = await supabase
-      .from('workspaces')
-      .select('id, name, slug, logo_url, avatar_color, avatar_emoji, api_usage_usd, api_limit_usd')
-      .in('id', wsIds)
+      setWorkspaces(list)
 
-    const wsMap = Object.fromEntries((wsData || []).map(w => [w.id, w]))
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('activeWorkspaceId') : null
+      const validStored = stored && list.find(w => w.id === stored)
+      const selected = validStored ? stored : list[0].id
 
-    const list: WorkspaceBasic[] = roles
-      .filter(r => wsMap[r.workspace_id])
-      .map(r => ({
-        id: r.workspace_id,
-        role: r.role,
-        ...wsMap[r.workspace_id],
-      }))
-
-    setWorkspaces(list)
-
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('activeWorkspaceId') : null
-    const validStored = stored && list.find(w => w.id === stored)
-    const selected = validStored ? stored : list[0].id
-
-    setActiveId(selected)
-    if (typeof window !== 'undefined') localStorage.setItem('activeWorkspaceId', selected)
-    setLoading(false)
-  }, [])
+      setActiveId(selected)
+      if (typeof window !== 'undefined') localStorage.setItem('activeWorkspaceId', selected)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }, [status])
 
   useEffect(() => { loadWorkspaces() }, [loadWorkspaces])
 
@@ -92,29 +85,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }
 
   async function createWorkspace(name: string): Promise<string | null> {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
+    try {
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      })
 
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') +
-      '-' + Math.floor(Math.random() * 9000 + 1000)
-
-    const { data: ws, error } = await supabase
-      .from('workspaces')
-      .insert({ name: name.trim(), slug, status: 'active', api_limit_usd: 20 })
-      .select('id')
-      .single()
-
-    if (error || !ws) return null
-
-    await supabase.from('user_workspace_roles').insert({
-      workspace_id: ws.id,
-      user_id: user.id,
-      role: 'admin',
-    })
-
-    await loadWorkspaces()
-    switchWorkspace(ws.id)
-    return ws.id
+      if (!res.ok) throw new Error('Failed to create workspace')
+      
+      const data = await res.json()
+      await loadWorkspaces()
+      switchWorkspace(data.id)
+      return data.id
+    } catch (err) {
+      console.error(err)
+      return null
+    }
   }
 
   const activeWorkspace = workspaces.find(w => w.id === activeId) || null

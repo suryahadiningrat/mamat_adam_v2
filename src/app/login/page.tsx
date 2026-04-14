@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Brain, ArrowRight, Loader2, Sparkles } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { signIn } from 'next-auth/react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,16 +18,17 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const result = await signIn('credentials', {
         email,
         password,
+        redirect: false,
       })
 
-      if (error) {
-        throw error
+      if (result?.error) {
+        throw new Error(result.error)
       }
 
-      if (data.session) {
+      if (result?.ok) {
         router.push('/')
         router.refresh()
       }
