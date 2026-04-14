@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ChevronDown, Heart, MessageCircle, Send, Bookmark, Repeat2, BarChart2, Image, ThumbsUp, Share2, Play } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ChevronDown, Heart, MessageCircle, Send, Bookmark, Repeat2, BarChart2, Image, ThumbsUp, Share2, Play, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 
@@ -28,6 +28,7 @@ type OutputRecord = {
   slides?: any[]
   scenes?: any[]
   visual_direction?: string
+  raw_response?: any
   status: Status
   created_at: string
   request: {
@@ -56,7 +57,7 @@ export default function LibraryPage() {
     const { data, error } = await supabase
       .from('generation_outputs')
       .select(`
-        id, content_title, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, status, created_at,
+        id, content_title, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, raw_response, status, created_at,
         request:generation_requests (
           platform,
           output_format,
@@ -194,6 +195,10 @@ export default function LibraryPage() {
   function InstagramMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'F'
+    const isCarousel = item.slides && item.slides.length > 0
+    const imgUrl = item.raw_response?.sketchUrl || item.scenes?.[0]?.sketch_url || null
+    const scrollRef = useRef<HTMLDivElement>(null)
+
     return (
       <div style={{ width: '100%' }}>
         <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginBottom: 12 }}>
@@ -206,8 +211,33 @@ export default function LibraryPage() {
               <div style={{ fontSize: 11, color: '#8e8e8e' }}>Sponsored</div>
             </div>
           </div>
-          <div style={{ width: '100%', aspectRatio: '1/1', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Image size={32} color="#c0c0c0" />
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', background: '#f0f0f0' }}>
+            <div className="hide-scroll" ref={scrollRef} style={{ width: '100%', height: '100%', display: 'flex', overflowX: isCarousel ? 'auto' : 'hidden', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
+              {isCarousel ? (
+                item.slides!.map((slide: any, idx: number) => (
+                  <div key={idx} style={{ flex: '0 0 100%', width: '100%', height: '100%', scrollSnapAlign: 'start', position: 'relative' }}>
+                    {slide.sketch_url ? (
+                      <img src={slide.sketch_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`Slide ${idx + 1}`} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Image size={32} color="#c0c0c0" /></div>
+                    )}
+                    <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>{idx + 1}/{item.slides!.length}</div>
+                  </div>
+                ))
+              ) : imgUrl ? (
+                <div style={{ flex: '0 0 100%', width: '100%', height: '100%' }}>
+                  <img src={imgUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Sketch Mockup" />
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Image size={32} color="#c0c0c0" /></div>
+              )}
+            </div>
+            {isCarousel && item.slides!.length > 1 && (
+              <>
+                <button onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex' }}><ChevronLeft size={16} /></button>
+                <button onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex' }}><ChevronRight size={16} /></button>
+              </>
+            )}
           </div>
           <div style={{ padding: '10px 14px 4px', display: 'flex', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: 14 }}><Heart size={22} color="#262626" /><MessageCircle size={22} color="#262626" /><Send size={22} color="#262626" /></div>
@@ -225,17 +255,47 @@ export default function LibraryPage() {
   function TwitterMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'B'
+    const isCarousel = item.slides && item.slides.length > 0
+    const imgUrl = item.raw_response?.sketchUrl || item.scenes?.[0]?.sketch_url || null
+    const scrollRef = useRef<HTMLDivElement>(null)
+
     return (
       <div style={{ width: '100%' }}>
         <div style={{ background: '#000', borderRadius: 12, border: '1px solid #2f3336', overflow: 'hidden', marginBottom: 12 }}>
           <div style={{ padding: '12px 16px', display: 'flex', gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'white', fontSize: 16 }}>{initial}</div>
-            <div style={{ width: '100%' }}>
+            <div style={{ width: '100%', overflow: 'hidden' }}>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: '#e7e9ea' }}>{item.request?.brand?.name || 'Brand'}</span>
                 <CheckCircle2 size={14} color="#1d9bf0" fill="#1d9bf0" stroke="black" />
                 <span style={{ color: '#71767b', fontSize: 13 }}>@{handle}</span>
               </div>
+              {isCarousel ? (
+                <div style={{ position: 'relative', marginTop: 12 }}>
+                  <div className="hide-scroll" ref={scrollRef} style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', gap: 8, paddingBottom: 8 }}>
+                    {item.slides!.map((slide: any, idx: number) => (
+                      <div key={idx} style={{ flex: '0 0 85%', scrollSnapAlign: 'start', borderRadius: 16, overflow: 'hidden', border: '1px solid #2f3336', position: 'relative' }}>
+                        {slide.sketch_url ? (
+                          <img src={slide.sketch_url} style={{ width: '100%', display: 'block' }} alt={`Slide ${idx + 1}`} />
+                        ) : (
+                          <div style={{ width: '100%', aspectRatio: '4/3', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Image size={24} color="#333" /></div>
+                        )}
+                        <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10, fontWeight: 600 }}>{idx + 1}/{item.slides!.length}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {item.slides!.length > 1 && (
+                    <>
+                      <button onClick={() => scrollRef.current?.scrollBy({ left: -250, behavior: 'smooth' })} style={{ position: 'absolute', left: 4, top: '45%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex' }}><ChevronLeft size={16} /></button>
+                      <button onClick={() => scrollRef.current?.scrollBy({ left: 250, behavior: 'smooth' })} style={{ position: 'absolute', right: 4, top: '45%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex' }}><ChevronRight size={16} /></button>
+                    </>
+                  )}
+                </div>
+              ) : imgUrl ? (
+                <div style={{ marginTop: 12, borderRadius: 16, overflow: 'hidden', border: '1px solid #2f3336' }}>
+                  <img src={imgUrl} style={{ width: '100%', display: 'block' }} alt="Sketch Mockup" />
+                </div>
+              ) : null}
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#71767b', marginTop: 14, paddingRight: 20 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><MessageCircle size={15} /> 42</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><Repeat2 size={15} /> 14</span>
@@ -250,28 +310,91 @@ export default function LibraryPage() {
     )
   }
 
+  function VideoSceneCarousel({ item, accentColor, platform }: { item: OutputRecord; accentColor: string; platform: string }) {
+    const scrollRef = useRef<HTMLDivElement>(null)
+    const hasScenes = item.scenes && item.scenes.length > 0
+
+    if (!hasScenes) return null
+    return (
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <div className="hide-scroll" ref={scrollRef} style={{
+          display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory',
+          gap: 0, borderRadius: 12, border: `1px solid ${accentColor}30`, overflow: 'hidden'
+        }}>
+          {item.scenes!.map((scene: any, idx: number) => (
+            <div key={idx} style={{ flex: '0 0 100%', scrollSnapAlign: 'start', background: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
+              {/* Scene Image */}
+              <div style={{ width: '100%', aspectRatio: '16/9', background: '#111', position: 'relative', overflow: 'hidden' }}>
+                {scene.sketch_url ? (
+                  <img src={scene.sketch_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`Scene ${idx + 1}`} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <Play size={28} color={`${accentColor}80`} />
+                    <span style={{ fontSize: 10, color: '#444' }}>No sketch generated</span>
+                  </div>
+                )}
+                {/* Scene badge */}
+                <div style={{ position: 'absolute', top: 8, left: 8, background: accentColor, color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                  Scene {scene.scene_number}
+                </div>
+                {/* Counter badge */}
+                <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                  {idx + 1}/{item.scenes!.length}
+                </div>
+              </div>
+              {/* Scene Script */}
+              <div style={{ padding: '10px 14px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Script</div>
+                <p style={{ fontSize: 12.5, color: '#ccc', lineHeight: 1.55, margin: 0 }}>{scene.script}</p>
+                {scene.visual_direction && (
+                  <p style={{ fontSize: 11, color: '#555', fontStyle: 'italic', margin: 0, borderTop: '1px solid #1a1a1a', paddingTop: 6, marginTop: 2 }}>
+                    📸 {scene.visual_direction}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Navigation buttons */}
+        {item.scenes!.length > 1 && (
+          <>
+            <button onClick={() => scrollRef.current?.scrollBy({ left: -600, behavior: 'smooth' })} style={{ position: 'absolute', left: 8, top: '25%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.6)', border: `1px solid ${accentColor}40`, borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex', backdropFilter: 'blur(4px)' }}><ChevronLeft size={16} /></button>
+            <button onClick={() => scrollRef.current?.scrollBy({ left: 600, behavior: 'smooth' })} style={{ position: 'absolute', right: 8, top: '25%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.6)', border: `1px solid ${accentColor}40`, borderRadius: '50%', color: 'white', padding: 6, cursor: 'pointer', display: 'flex', backdropFilter: 'blur(4px)' }}><ChevronRight size={16} /></button>
+          </>
+        )}
+      </div>
+    )
+  }
+
   function TikTokMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
+    const hasScenes = item.scenes && item.scenes.length > 0
     return (
       <div style={{ width: '100%' }}>
-        <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden', position: 'relative', marginBottom: 12 }}>
-          <div style={{ width: '100%', aspectRatio: '9/16', maxHeight: 280, background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', padding: 16 }}>
-            <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)' }}>
-              <Play size={40} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
-            </div>
-            <div style={{ position: 'absolute', right: 12, bottom: 60, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
-              {[{ Icon: Heart, label: '12.4K' }, { Icon: MessageCircle, label: '842' }, { Icon: Share2, label: 'Share' }].map(({ Icon, label }) => (
-                <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <Icon size={22} color="white" />
-                  <span style={{ fontSize: 9, color: 'white', fontWeight: 600 }}>{label}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '20px 0 0' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginBottom: 4 }}>@{handle}</div>
-              <div style={{ fontSize: 11, color: '#ee1d52' }}>{item.hashtag_pack?.slice(0, 3).join(' ')}</div>
-            </div>
+        {/* TikTok header bar */}
+        <div style={{ background: '#000', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1a1a1a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ee1d52', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 11 }}>{handle.charAt(0).toUpperCase()}</div>
+            <span style={{ color: 'white', fontSize: 12, fontWeight: 600 }}>@{handle}</span>
           </div>
+          <div style={{ display: 'flex', gap: 14 }}>
+            <Heart size={16} color="white" />
+            <MessageCircle size={16} color="white" />
+            <Share2 size={16} color="white" />
+          </div>
+        </div>
+        {hasScenes ? (
+          <VideoSceneCarousel item={item} accentColor="#ee1d52" platform="TikTok" />
+        ) : (
+          <div style={{ background: '#000', borderRadius: '0 0 12px 12px', width: '100%', aspectRatio: '9/16', maxHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Play size={40} color="rgba(255,255,255,0.2)" fill="rgba(255,255,255,0.2)" />
+          </div>
+        )}
+        {/* Hashtags */}
+        <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {item.hashtag_pack?.slice(0, 5).map((tag: string, i: number) => (
+            <span key={i} style={{ fontSize: 11, color: '#ee1d52', fontWeight: 600 }}>{tag}</span>
+          ))}
         </div>
         <ContentPanel item={item} />
       </div>
@@ -281,22 +404,28 @@ export default function LibraryPage() {
   function YouTubeMockup({ item }: { item: OutputRecord }) {
     const handle = item.request?.brand?.name || 'Brand'
     const initial = item.request?.brand?.name?.charAt(0) || 'B'
+    const hasScenes = item.scenes && item.scenes.length > 0
     return (
       <div style={{ width: '100%' }}>
-        <div style={{ background: '#0f0f0f', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-          <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Play size={20} color="white" fill="white" />
+        <div style={{ background: '#0f0f0f', borderRadius: '12px 12px 0 0', overflow: 'hidden' }}>
+          {hasScenes ? (
+            <VideoSceneCarousel item={item} accentColor="#ff0000" platform="YouTube" />
+          ) : (
+            <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Play size={20} color="white" fill="white" />
+              </div>
+              <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.8)', color: 'white', fontSize: 11, fontWeight: 600, padding: '2px 5px', borderRadius: 4 }}>1:32</div>
             </div>
-            <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.8)', color: 'white', fontSize: 11, fontWeight: 600, padding: '2px 5px', borderRadius: 4 }}>1:32</div>
-          </div>
-          <div style={{ padding: '10px 12px', display: 'flex', gap: 10 }}>
+          )}
+          <div style={{ padding: '10px 12px', display: 'flex', gap: 10, background: '#0f0f0f' }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ff0000', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>{initial}</div>
             <div>
-              <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{handle} · 12K views · 3 days ago</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{item.content_title || 'Untitled Video'}</div>
+              <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>{handle} · 12K views · 3 days ago</div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 0, borderTop: '1px solid #272727', padding: '0 12px' }}>
+          <div style={{ display: 'flex', gap: 0, borderTop: '1px solid #272727', padding: '0 12px', background: '#0f0f0f', borderRadius: '0 0 12px 12px' }}>
             {[{ Icon: ThumbsUp, label: '4.2K' }, { Icon: Share2, label: 'Share' }, { Icon: Bookmark, label: 'Save' }].map(({ Icon, label }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', fontSize: 12, color: '#aaa', cursor: 'pointer' }}>
                 <Icon size={14} /> {label}
@@ -304,6 +433,7 @@ export default function LibraryPage() {
             ))}
           </div>
         </div>
+        <div style={{ marginBottom: 12 }} />
         <ContentPanel item={item} />
       </div>
     )
@@ -353,8 +483,37 @@ export default function LibraryPage() {
     )
   }
 
+  function InstagramReelsMockup({ item }: { item: OutputRecord }) {
+    const handle = item.request?.brand?.name?.toLowerCase().replace(/\s/g, '') || 'brand'
+    const initial = item.request?.brand?.name?.charAt(0) || 'F'
+    return (
+      <div style={{ width: '100%' }}>
+        {/* IG Header */}
+        <div style={{ background: 'white', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #efefef' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e1306c', fontSize: 10, fontWeight: 700 }}>{initial}</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#262626' }}>{handle}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 14 }}>
+            <Heart size={16} color="#262626" />
+            <MessageCircle size={16} color="#262626" />
+            <Send size={16} color="#262626" />
+          </div>
+        </div>
+        <VideoSceneCarousel item={item} accentColor="#e1306c" platform="Instagram Reels" />
+        <ContentPanel item={item} />
+      </div>
+    )
+  }
+
   function renderMockup(item: OutputRecord) {
     const p = item.request?.platform
+    const fmt = item.request?.output_format || ''
+    // Instagram Reels / Story-Video formats → storyboard carousel
+    const isInstagramVideo = p === 'Instagram' && (fmt.toLowerCase().includes('reel') || fmt.toLowerCase().includes('video'))
+    if (isInstagramVideo) return <InstagramReelsMockup item={item} />
     if (p === 'Instagram') return <InstagramMockup item={item} />
     if (p === 'Twitter/X') return <TwitterMockup item={item} />
     if (p === 'TikTok') return <TikTokMockup item={item} />

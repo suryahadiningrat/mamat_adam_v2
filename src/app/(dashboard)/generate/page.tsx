@@ -4,7 +4,7 @@ import {
   Zap, ChevronDown, Sparkles, Copy, RefreshCw,
   CheckCircle2, Hash, Image, MessageSquare, ArrowRight,
   ToggleLeft, ToggleRight, Info, Brain, Package, Save,
-  Plus, Trash2, Film, Layers, Monitor, Link, X, type LucideIcon
+  Plus, Trash2, Film, Layers, Monitor, Link, X, PenTool, type LucideIcon
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
@@ -87,8 +87,8 @@ type DBProduct = {
   product_brain_versions: { usp: string; functional_benefits: any }[]
 }
 
-type Slide = { slide_number: number; copy_on_visual: string; visual_direction: string }
-type Scene = { scene_number: number; script: string; visual_direction: string }
+type Slide = { slide_number: number; copy_on_visual: string; visual_direction: string; sketch_url?: string }
+type Scene = { scene_number: number; script: string; visual_direction: string; sketch_url?: string }
 
 type GeneratedOutput = {
   content_title?: string
@@ -201,6 +201,12 @@ export default function GeneratePage() {
   const [editRationale, setEditRationale] = useState('')
   const [regenOpen, setRegenOpen] = useState(false)
   const [regenContext, setRegenContext] = useState('')
+  const [sketchUrl, setSketchUrl] = useState<string>('')
+  const [slideSketches, setSlideSketches] = useState<Record<number, string>>({})
+  const [sceneSketches, setSceneSketches] = useState<Record<number, string>>({})
+  const [sketchLoading, setSketchLoading] = useState<Record<string, boolean>>({})
+  const [fullScreenImg, setFullScreenImg] = useState<string | null>(null)
+  const [sketchRevision, setSketchRevision] = useState<Record<string, string>>({})
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
   const [scrapeResult, setScrapeResult] = useState<{ title: string; content_type: string; main_topic: string; key_claims: string[]; tone: string; summary: string; content_angles: string[] } | null>(null)
@@ -310,6 +316,10 @@ export default function GeneratePage() {
     setRegenOpen(false)
     setRegenContext('')
     setLibrarySaved(false)
+    setSketchUrl('')
+    setSlideSketches({})
+    setSceneSketches({})
+    setSketchLoading({})
 
     try {
       const brain = selectedBrand.brand_brain_versions?.[0]
@@ -430,7 +440,7 @@ export default function GeneratePage() {
         hashtag_pack: hashtagPack,
         visual_direction: editVisualDirection || null,
         rationale: editRationale || null,
-        raw_response: output,
+        raw_response: { ...output, sketchUrl: sketchUrl || undefined },
         status: 'approved'
       })
 
@@ -496,6 +506,61 @@ export default function GeneratePage() {
   }
   function removeScene(idx: number) {
     setEditableScenes(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, scene_number: i + 1 })))
+  }
+
+  // Build a globally-consistent image generation prompt that anchors every slide/scene to the brand/product context.
+  function buildSketchPrompt(slidePrompt: string) {
+    const brandName = selectedBrand?.name || ''
+    const productName = isGeneralMode ? '' : (selectedProduct?.name || '')
+    const contentTitle = editableTitle || ''
+    const platform = form.platform || ''
+
+    // Build a concise context header
+    const contextLines: string[] = []
+    if (brandName) contextLines.push(`Brand: ${brandName}`)
+    if (productName) contextLines.push(`Product: ${productName}`)
+    if (contentTitle) contextLines.push(`Content: ${contentTitle}`)
+    if (platform) contextLines.push(`Platform: ${platform}`)
+
+    const contextHeader = contextLines.join(', ')
+    return `[Context: ${contextHeader}] ${slidePrompt}`
+  }
+
+  async function handleGenerateSketch(type: 'single' | 'slide' | 'scene', idx?: number, promptText: string = '') {
+    if (!promptText.trim()) return;
+    
+    const key = type === 'single' ? 'single' : `${type}-${idx}`;
+    setSketchLoading(prev => ({ ...prev, [key]: true }));
+
+    // Enrich prompt with brand/product/content context for consistent subject matter across all images
+    const enrichedPrompt = buildSketchPrompt(promptText);
+
+    try {
+      const res = await fetch('/api/generate-sketch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: enrichedPrompt })
+      });
+      const data = await res.json();
+      
+      if (data.success && data.sketchUrl) {
+        if (type === 'single') {
+          setSketchUrl(data.sketchUrl);
+        } else if (type === 'slide' && idx !== undefined) {
+          setSlideSketches(s => ({ ...s, [idx]: data.sketchUrl }));
+          updateSlide(idx, 'sketch_url', data.sketchUrl);
+        } else if (type === 'scene' && idx !== undefined) {
+          setSceneSketches(s => ({ ...s, [idx]: data.sketchUrl }));
+          updateScene(idx, 'sketch_url', data.sketchUrl);
+        }
+      } else {
+        alert(data.error || 'Failed to generate sketch');
+      }
+    } catch (err) {
+      alert('Network error while generating sketch');
+    } finally {
+      setSketchLoading(prev => ({ ...prev, [key]: false }));
+    }
   }
 
   return (
@@ -820,7 +885,7 @@ export default function GeneratePage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                          {['#', 'Copy On Visual', 'Visual Direction', ''].map(h => (
+                          {['#', 'Copy On Visual', 'Visual Direction', 'Sketch Reference', ''].map(h => (
                             <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -838,6 +903,31 @@ export default function GeneratePage() {
                             <td style={{ padding: '10px 12px' }}>
                               <textarea value={slide.visual_direction} onChange={e => updateSlide(idx, 'visual_direction', e.target.value)}
                                 style={cellStyle} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                            </td>
+                            <td style={{ padding: '10px 12px', width: 140, textAlign: 'center' }}>
+                              {!slideSketches[idx] ? (
+                                <button onClick={() => handleGenerateSketch('slide', idx, `${slide.visual_direction} - ${slide.copy_on_visual}`)} disabled={sketchLoading[`slide-${idx}`]}
+                                  style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-3)', cursor: sketchLoading[`slide-${idx}`] ? 'not-allowed' : 'pointer', fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', opacity: sketchLoading[`slide-${idx}`] ? 0.6 : 1 }}>
+                                  {sketchLoading[`slide-${idx}`] ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <PenTool size={12} />} 
+                                  {sketchLoading[`slide-${idx}`] ? 'Generating...' : 'Draw Image'}
+                                </button>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', alignItems: 'center' }}>
+                                  <img src={slideSketches[idx]} alt={`Slide ${slide.slide_number} sketch`} style={{ width: '100%', maxWidth: 120, borderRadius: 8, border: '1px solid var(--border)', cursor: 'zoom-in' }} onClick={() => setFullScreenImg(slideSketches[idx])} />
+                                  <textarea
+                                    placeholder="Revision notes (optional)…"
+                                    value={sketchRevision[`slide-${idx}`] || ''}
+                                    onChange={e => setSketchRevision(prev => ({ ...prev, [`slide-${idx}`]: e.target.value }))}
+                                    style={{ width: '100%', fontSize: 10, padding: '4px 6px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-secondary)', resize: 'none', outline: 'none', minHeight: 36, fontFamily: 'var(--font-body)' }}
+                                  />
+                                  <button
+                                    onClick={() => handleGenerateSketch('slide', idx, `${slide.visual_direction} - ${slide.copy_on_visual}${sketchRevision[`slide-${idx}`] ? '. Revise: ' + sketchRevision[`slide-${idx}`] : ''}`)}
+                                    disabled={sketchLoading[`slide-${idx}`]}
+                                    style={{ background: 'none', border: 'none', cursor: sketchLoading[`slide-${idx}`] ? 'not-allowed' : 'pointer', fontSize: 10, color: 'var(--text-tertiary)', textDecoration: 'underline', opacity: sketchLoading[`slide-${idx}`] ? 0.6 : 1 }}>
+                                    {sketchLoading[`slide-${idx}`] ? 'Generating...' : 'Redraw'}
+                                  </button>
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: '10px 12px', width: 40 }}>
                               <button onClick={() => removeSlide(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4, transition: 'color 0.15s' }}
@@ -871,7 +961,7 @@ export default function GeneratePage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                          {['Scene', 'Script / Dialogue', 'Visual Direction', ''].map(h => (
+                          {['Scene', 'Script / Dialogue', 'Visual Direction', 'Storyboard Sketch', ''].map(h => (
                             <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -889,6 +979,31 @@ export default function GeneratePage() {
                             <td style={{ padding: '10px 12px' }}>
                               <textarea value={scene.visual_direction} onChange={e => updateScene(idx, 'visual_direction', e.target.value)}
                                 style={cellStyle} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                            </td>
+                            <td style={{ padding: '10px 12px', width: 140, textAlign: 'center' }}>
+                              {!sceneSketches[idx] ? (
+                                <button onClick={() => handleGenerateSketch('scene', idx, `${scene.visual_direction} - ${scene.script}`)} disabled={sketchLoading[`scene-${idx}`]}
+                                  style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-3)', cursor: sketchLoading[`scene-${idx}`] ? 'not-allowed' : 'pointer', fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', opacity: sketchLoading[`scene-${idx}`] ? 0.6 : 1 }}>
+                                  {sketchLoading[`scene-${idx}`] ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <PenTool size={12} />} 
+                                  {sketchLoading[`scene-${idx}`] ? 'Generating...' : 'Draw Image'}
+                                </button>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+                                  <textarea
+                                    placeholder="Revision notes (optional)…"
+                                    value={sketchRevision[`scene-${idx}`] || ''}
+                                    onChange={e => setSketchRevision(prev => ({ ...prev, [`scene-${idx}`]: e.target.value }))}
+                                    style={{ width: '100%', fontSize: 10, padding: '4px 6px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-secondary)', resize: 'none', outline: 'none', minHeight: 38, fontFamily: 'var(--font-body)' }}
+                                  />
+                                  <img src={sceneSketches[idx]} alt={`Scene ${scene.scene_number} sketch`} style={{ width: '100%', maxWidth: 120, borderRadius: 8, border: '1px solid var(--border)', cursor: 'zoom-in' }} onClick={() => setFullScreenImg(sceneSketches[idx])} />
+                                  <button
+                                    onClick={() => handleGenerateSketch('scene', idx, `${scene.visual_direction} - ${scene.script}${sketchRevision[`scene-${idx}`] ? '. Revise: ' + sketchRevision[`scene-${idx}`] : ''}`)}
+                                    disabled={sketchLoading[`scene-${idx}`]}
+                                    style={{ background: 'none', border: 'none', cursor: sketchLoading[`scene-${idx}`] ? 'not-allowed' : 'pointer', fontSize: 10, color: 'var(--text-tertiary)', textDecoration: 'underline', opacity: sketchLoading[`scene-${idx}`] ? 0.6 : 1 }}>
+                                    {sketchLoading[`scene-${idx}`] ? 'Generating...' : 'Redraw'}
+                                  </button>
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: '10px 12px', width: 40 }}>
                               <button onClick={() => removeScene(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4, transition: 'color 0.15s' }}
@@ -954,6 +1069,22 @@ export default function GeneratePage() {
                 <OutputSection icon={Image} label="Visual Direction" color="var(--text-secondary)" extra={<CopyBtn text={editVisualDirection} />}>
                   <textarea value={editVisualDirection} onChange={e => setEditVisualDirection(e.target.value)} rows={3}
                     style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, fontStyle: 'italic', fontFamily: 'var(--font-body)', padding: 0 }} />
+                  
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reference Image</span>
+                      <button onClick={() => handleGenerateSketch('single', undefined, `${editVisualDirection} - ${editCopyOnVisual}`)} disabled={sketchLoading['single']}
+                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: sketchLoading['single'] ? 'not-allowed' : 'pointer', fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, opacity: sketchLoading['single'] ? 0.6 : 1 }}>
+                        {sketchLoading['single'] ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <PenTool size={12} />} 
+                        {sketchLoading['single'] ? 'Generating...' : (sketchUrl ? 'Redraw Image' : 'Draw Image')}
+                      </button>
+                    </div>
+                    {sketchUrl && (
+                      <div style={{ width: '100%', maxWidth: 300, margin: '0 auto', background: 'var(--surface-2)', padding: 8, borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <img src={sketchUrl} alt="Visual Reference Sketch" style={{ width: '100%', borderRadius: 6, display: 'block', cursor: 'zoom-in' }} onClick={() => setFullScreenImg(sketchUrl)} />
+                      </div>
+                    )}
+                  </div>
                 </OutputSection>
               )}
               {output.rationale && (
@@ -990,6 +1121,16 @@ export default function GeneratePage() {
           )}
         </div>
       </div>
+
+      {fullScreenImg && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }} onClick={() => setFullScreenImg(null)}>
+          <button style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'} onClick={() => setFullScreenImg(null)}>
+            <X size={24} />
+          </button>
+          <img src={fullScreenImg} alt="Fullscreen Sketch" style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: '12px', objectFit: 'contain', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
