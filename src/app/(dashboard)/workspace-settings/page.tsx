@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { useSession } from 'next-auth/react'
 import {
   Building2, Users, DollarSign, Save, CheckCircle2, AlertCircle,
   UserPlus, Trash2, Shield, ChevronDown, RefreshCw, Mail, Palette,
@@ -72,83 +72,104 @@ export default function WorkspaceSettingsPage() {
 
   const isAdmin = userRole === 'admin'
 
+  const { data: session } = useSession()
+
   useEffect(() => {
-    if (workspaceId) load()
-  }, [workspaceId])
+    if (workspaceId && session?.user) load()
+  }, [workspaceId, session])
 
   async function load() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
+    if (!session?.user) return
+    const userId = (session.user as any).id
+    setUserId(userId)
 
-    const [wsRes, roleRes] = await Promise.all([
-      supabase.from('workspaces').select('name, description, logo_url, avatar_color, avatar_emoji, api_usage_usd, api_limit_usd').eq('id', workspaceId).single(),
-      supabase.from('user_workspace_roles').select('role').eq('workspace_id', workspaceId).eq('user_id', user.id).single(),
-    ])
+    try {
+      const res = await fetch(`/api/settings/workspace?workspaceId=${workspaceId}`)
+      const data = await res.json()
 
-    if (wsRes.data) {
-      setForm({
-        name: wsRes.data.name ?? '',
-        description: wsRes.data.description ?? '',
-        logo_url: wsRes.data.logo_url ?? '',
-        avatar_color: wsRes.data.avatar_color ?? '#7c6dfa',
-        avatar_emoji: wsRes.data.avatar_emoji ?? '',
-      })
-      setApiLimit(String(wsRes.data.api_limit_usd ?? 20))
-      setApiUsage(wsRes.data.api_usage_usd ?? 0)
+      if (data.workspace) {
+        setForm({
+          name: data.workspace.name ?? '',
+          description: data.workspace.description ?? '',
+          logo_url: data.workspace.logo_url ?? '',
+          avatar_color: data.workspace.avatar_color ?? '#7c6dfa',
+          avatar_emoji: data.workspace.avatar_emoji ?? '',
+        })
+        setApiLimit(String(data.workspace.api_limit_usd ?? 20))
+        setApiUsage(data.workspace.api_usage_usd ?? 0)
+      }
+      if (data.role) {
+        setUserRole(data.role)
+      }
+
+      await loadTeam(userId)
+    } catch (err) {
+      console.error('Error loading workspace settings:', err)
     }
-
-    if (roleRes.data) setUserRole(roleRes.data.role)
-
-    await loadTeam(user.id)
     setLoading(false)
   }
 
   async function loadTeam(currentUserId: string) {
-    const [rolesRes, invitesRes] = await Promise.all([
-      supabase.from('user_workspace_roles').select('user_id, role').eq('workspace_id', workspaceId),
-      supabase.from('workspace_invitations').select('id, invited_email, role, created_at')
-        .eq('workspace_id', workspaceId).eq('status', 'pending').order('created_at', { ascending: false })
-    ])
-    if (rolesRes.data) {
-      const ids = rolesRes.data.map(r => r.user_id)
-      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, email').in('id', ids)
-      const pMap: Record<string, any> = {}
-      for (const p of profiles || []) pMap[p.id] = p
-      setMembers(rolesRes.data.map(r => ({
-        user_id: r.user_id, role: r.role,
-        full_name: pMap[r.user_id]?.full_name || null,
-        email: pMap[r.user_id]?.email || null,
-        is_current: r.user_id === currentUserId
-      })))
+    try {
+      const res = await fetch(`/api/settings/team?workspaceId=${workspaceId}`)
+      const data = await res.json()
+
+      if (data.members) {
+        setMembers(data.members.map((m: any) => ({
+          ...m,
+          is_current: m.user_id === currentUserId
+        })))
+      }
+      if (data.invites) setInvites(data.invites)
+    } catch (err) {
+      console.error('Error loading team:', err)
     }
-    if (invitesRes.data) setInvites(invitesRes.data)
   }
 
   async function handleSaveIdentity() {
     setSaving(true); setError(''); setSaved(false)
-    const { error: err } = await supabase.from('workspaces').update({
-      name: form.name.trim(),
-      description: form.description,
-      logo_url: form.logo_url || null,
-      avatar_color: form.avatar_color,
-      avatar_emoji: form.avatar_emoji || null,
-    }).eq('id', workspaceId)
-    if (err) { setError(err.message); setSaving(false); return }
-    setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-    refreshWorkspaces()
+    try {
+      const res = await fetch('/api/settings/workspace', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          name: form.name.trim(),
+          description: form.description,
+          logo_url: form.logo_url || null,
+          avatar_color: form.avatar_color,
+          avatar_emoji: form.avatar_emoji || null,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save identity')
+      setSaving(false); setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+      refreshWorkspaces()
+    } catch (err: any) {
+      setError(err.message); setSaving(false)
+    }
   }
 
   async function handleSaveBilling() {
     setSaving(true); setError('')
-    const { error: err } = await supabase.from('workspaces').update({
-      api_limit_usd: parseFloat(apiLimit) || 20
-    }).eq('id', workspaceId)
-    if (err) { setError(err.message); setSaving(false); return }
-    setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    try {
+      const res = await fetch('/api/settings/workspace', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          api_limit_usd: parseFloat(apiLimit) || 20
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save billing')
+      setSaving(false); setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: any) {
+      setError(err.message); setSaving(false)
+    }
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -157,63 +178,95 @@ export default function WorkspaceSettingsPage() {
     if (!email) return
     setInviting(true); setTeamError(''); setTeamMsg('')
 
-    const { data: existingProfile } = await supabase
-      .from('user_profiles').select('id').eq('email', email).maybeSingle()
-
-    if (existingProfile) {
-      const { data: already } = await supabase.from('user_workspace_roles')
-        .select('id').eq('workspace_id', workspaceId).eq('user_id', existingProfile.id).maybeSingle()
-      if (already) {
-        setTeamError('This user is already a member.')
-      } else {
-        const { error: err } = await supabase.from('user_workspace_roles').insert({
-          workspace_id: workspaceId, user_id: existingProfile.id, role: inviteRole
+    try {
+      const res = await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'invite',
+          workspaceId,
+          email,
+          role: inviteRole
         })
-        if (err) setTeamError(err.message)
-        else { setTeamMsg(`${email} added immediately.`); setInviteEmail(''); await loadTeam(userId) }
-      }
-    } else {
-      const { error: err } = await supabase.from('workspace_invitations').insert({
-        workspace_id: workspaceId, invited_email: email, invited_by: userId, role: inviteRole
       })
-      if (err) setTeamError(err.message.includes('unique') ? 'Already has a pending invite.' : err.message)
-      else { setTeamMsg(`Invite created for ${email}.`); setInviteEmail(''); await loadTeam(userId) }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to send invite')
+      setTeamMsg(data.message)
+      setInviteEmail('')
+      await loadTeam(userId)
+    } catch (err: any) {
+      setTeamError(err.message)
     }
     setInviting(false)
   }
 
   async function handleRoleChange(memberId: string, role: string) {
-    await supabase.from('user_workspace_roles').update({ role }).eq('workspace_id', workspaceId).eq('user_id', memberId)
-    setMembers(prev => prev.map(m => m.user_id === memberId ? { ...m, role } : m))
+    try {
+      await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateRole', workspaceId, memberId, newRole: role })
+      })
+      setMembers(prev => prev.map(m => m.user_id === memberId ? { ...m, role } : m))
+    } catch (err) {
+      console.error('Failed to update role', err)
+    }
   }
 
   async function handleRemoveMember(memberId: string) {
     if (!confirm('Remove this member from the workspace?')) return
-    await supabase.from('user_workspace_roles').delete().eq('workspace_id', workspaceId).eq('user_id', memberId)
-    setMembers(prev => prev.filter(m => m.user_id !== memberId))
+    try {
+      await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeMember', workspaceId, memberId })
+      })
+      setMembers(prev => prev.filter(m => m.user_id !== memberId))
+    } catch (err) {
+      console.error('Failed to remove member', err)
+    }
   }
 
   async function handleRevokeInvite(id: string) {
-    await supabase.from('workspace_invitations').update({ status: 'revoked' }).eq('id', id)
-    setInvites(prev => prev.filter(i => i.id !== id))
+    try {
+      await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revokeInvite', workspaceId, inviteId: id })
+      })
+      setInvites(prev => prev.filter(i => i.id !== id))
+    } catch (err) {
+      console.error('Failed to revoke invite', err)
+    }
   }
 
   async function handleLeaveWorkspace() {
     if (!confirm('Leave this workspace? You will lose access to all its content.')) return
-    await supabase.from('user_workspace_roles').delete().eq('workspace_id', workspaceId).eq('user_id', userId)
-    refreshWorkspaces()
-    window.location.href = '/'
+    try {
+      await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeMember', workspaceId, memberId: userId })
+      })
+      refreshWorkspaces()
+      window.location.href = '/'
+    } catch (err) {
+      console.error('Failed to leave workspace', err)
+    }
   }
 
   async function handleDeleteWorkspace() {
     const name = prompt(`Type the workspace name "${form.name}" to confirm deletion:`)
     if (name !== form.name) { alert('Name did not match. Deletion cancelled.'); return }
-    // Cascade delete — assumes DB cascade or manual cleanup
-    await supabase.from('user_workspace_roles').delete().eq('workspace_id', workspaceId)
-    await supabase.from('workspace_invitations').delete().eq('workspace_id', workspaceId)
-    await supabase.from('workspaces').delete().eq('id', workspaceId)
-    refreshWorkspaces()
-    window.location.href = '/'
+    try {
+      await fetch(`/api/settings/workspace?workspaceId=${workspaceId}`, {
+        method: 'DELETE'
+      })
+      refreshWorkspaces()
+      window.location.href = '/'
+    } catch (err) {
+      console.error('Failed to delete workspace', err)
+    }
   }
 
   const usagePct = parseFloat(apiLimit) > 0 ? Math.min((apiUsage / parseFloat(apiLimit)) * 100, 100) : 0

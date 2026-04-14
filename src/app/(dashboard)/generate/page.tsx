@@ -218,7 +218,7 @@ export default function GeneratePage() {
   useEffect(() => {
     if (!workspaceId || !session?.user) return
     async function initData() {
-      setUserId((session.user as any).id)
+      setUserId((session?.user as any)?.id)
 
       const [bDataRes, pDataRes] = await Promise.all([
         fetch(`/api/brands?workspaceId=${workspaceId}`),

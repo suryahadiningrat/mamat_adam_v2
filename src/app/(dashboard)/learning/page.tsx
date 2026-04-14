@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { Layers, TrendingUp, CheckCircle2, Clock, XCircle, Brain, Zap, Target, BarChart3, Sparkles } from 'lucide-react'
 
@@ -26,65 +25,63 @@ export default function LearningPage() {
     const wsId = workspaceId
     if (!wsId) { setLoading(false); return }
 
-    // Fetch all outputs with their request details
-    const { data: outputs } = await supabase.from('generation_outputs')
-      .select(`
-        id, status, created_at,
-        generation_requests ( platform, objective, framework_id, brands ( name ) )
-      `)
-      .eq('workspace_id', wsId)
-      .order('created_at', { ascending: false })
+    try {
+      const res = await fetch(`/api/learning?workspaceId=${wsId}`)
+      const { outputs } = await res.json()
 
-    if (!outputs) { setLoading(false); return }
+      if (!outputs) { setLoading(false); return }
 
-    // Overall stats
-    const total = outputs.length
-    const approved = outputs.filter(o => o.status === 'approved').length
-    const draft = outputs.filter(o => o.status === 'draft').length
-    const rejected = outputs.filter(o => o.status === 'rejected').length
-    setStats({
-      totalOutputs: total,
-      approved,
-      draft,
-      rejected,
-      approvalRate: total > 0 ? Math.round((approved / total) * 100) : 0,
-    })
+      // Overall stats
+      const total = outputs.length
+      const approved = outputs.filter((o: any) => o.status === 'approved').length
+      const draft = outputs.filter((o: any) => o.status === 'draft').length
+      const rejected = outputs.filter((o: any) => o.status === 'rejected').length
+      setStats({
+        totalOutputs: total,
+        approved,
+        draft,
+        rejected,
+        approvalRate: total > 0 ? Math.round((approved / total) * 100) : 0,
+      })
 
-    // Framework breakdown — framework_id is currently null in most rows, use a label fallback
-    // Group by platform
-    const platformMap: Record<string, { count: number; approved: number }> = {}
-    const objectiveMap: Record<string, number> = {}
+      // Framework breakdown — framework_id is currently null in most rows, use a label fallback
+      // Group by platform
+      const platformMap: Record<string, { count: number; approved: number }> = {}
+      const objectiveMap: Record<string, number> = {}
 
-    outputs.forEach((o: any) => {
-      const req = Array.isArray(o.generation_requests) ? o.generation_requests[0] : o.generation_requests
-      const platform = req?.platform ?? 'Unknown'
-      const objective = req?.objective ?? 'Unknown'
+      outputs.forEach((o: any) => {
+        const req = o.request
+        const platform = req?.platform ?? 'Unknown'
+        const objective = req?.objective ?? 'Unknown'
 
-      if (!platformMap[platform]) platformMap[platform] = { count: 0, approved: 0 }
-      platformMap[platform].count++
-      if (o.status === 'approved') platformMap[platform].approved++
+        if (!platformMap[platform]) platformMap[platform] = { count: 0, approved: 0 }
+        platformMap[platform].count++
+        if (o.status === 'approved') platformMap[platform].approved++
 
-      objectiveMap[objective] = (objectiveMap[objective] || 0) + 1
-    })
+        objectiveMap[objective] = (objectiveMap[objective] || 0) + 1
+      })
 
-    const platformArr = Object.entries(platformMap)
-      .map(([name, d]) => ({
-        name,
-        count: d.count,
-        approved: d.approved,
-        rate: d.count > 0 ? Math.round((d.approved / d.count) * 100) : 0
-      }))
-      .sort((a, b) => b.count - a.count)
+      const platformArr = Object.entries(platformMap)
+        .map(([name, d]) => ({
+          name,
+          count: d.count,
+          approved: d.approved,
+          rate: d.count > 0 ? Math.round((d.approved / d.count) * 100) : 0
+        }))
+        .sort((a, b) => b.count - a.count)
 
-    const objectiveArr = Object.entries(objectiveMap)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
+      const objectiveArr = Object.entries(objectiveMap)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
 
-    setPlatformStats(platformArr)
-    setObjectiveStats(objectiveArr)
+      setPlatformStats(platformArr)
+      setObjectiveStats(objectiveArr)
 
-    // Recent activity (last 10)
-    setRecentActivity(outputs.slice(0, 10))
+      // Recent activity (last 10)
+      setRecentActivity(outputs.slice(0, 10))
+    } catch (err) {
+      console.error('Error loading insights:', err)
+    }
 
     setLoading(false)
   }
@@ -245,9 +242,9 @@ export default function LearningPage() {
                 No activity yet. <a href="/generate" style={{ color: 'var(--accent)' }}>Generate your first content →</a>
               </div>
             ) : recentActivity.map((o: any) => {
-              const req = Array.isArray(o.generation_requests) ? o.generation_requests[0] : o.generation_requests
+              const req = o.request
               const platform = req?.platform ?? '—'
-              const brand = req?.brands?.name ?? '—'
+              const brand = req?.brand?.name ?? '—'
               const statusColor = o.status === 'approved' ? 'var(--green)' : o.status === 'rejected' ? 'var(--red)' : 'var(--amber)'
               return (
                 <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>

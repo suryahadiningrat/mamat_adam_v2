@@ -12,6 +12,7 @@ model User {
   password      String
   full_name     String?
   avatar_url    String?
+  is_superadmin Boolean   @default(false)
   status        String    @default("active") // active, archived
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
@@ -27,6 +28,7 @@ model Workspace {
   id            String    @id @default(uuid())
   name          String
   slug          String    @unique
+  description   String?
   logo_url      String?
   avatar_color  String?
   avatar_emoji  String?

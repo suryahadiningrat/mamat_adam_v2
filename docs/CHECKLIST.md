@@ -3,14 +3,13 @@
 > Track development progress and feature completion. 
 > Referensi ini digunakan oleh AI Agent untuk memahami fitur secara detail sebelum menambahkan sub-fitur.
 
-## Phase 0.5 — Migrasi Infrastruktur: Dari Supabase ke Local PostgreSQL 🚧 URGENT
-**Tujuan:** Mengganti semua dependensi BaaS (Backend-as-a-Service) Supabase menjadi solusi self-hosted yang mengandalkan server PostgreSQL lokal, Auth mandiri, dan Storage lokal.
-- [ ] **Database ORM Setup:** Instal dan konfigurasi ORM seperti `Prisma` atau `Drizzle ORM` untuk menghubungkan aplikasi Next.js dengan server PostgreSQL (`localhost:5432`).
-- [ ] **Migrasi Schema DB:** Terjemahkan file `supabase-schema.sql` (beserta fungsi RPC) menjadi skema ORM (contoh: `schema.prisma`) dan jalankan migrasinya (`prisma db push`).
-- [ ] **Auth Replacement (NextAuth/Auth.js):** Ganti Supabase Auth dengan NextAuth.js. Buat *provider* Credentials (Email/Password) dan pastikan mekanisme enkripsi *password* menggunakan `bcrypt`.
-- [ ] **Application-Level Security (RLS Removal):** Karena PostgreSQL lokal tidak memiliki fungsi `auth.uid()` seperti Supabase, semua fitur keamanan RLS (Row Level Security) harus diganti. Tambahkan validasi *workspace* (`WHERE workspace_id IN (...)`) secara manual di *setiap* route API atau Server Action berdasarkan session NextAuth pengguna.
-- [ ] **Storage Replacement:** Buat endpoint API (`/api/upload`) untuk menangani pengunggahan file (gambar produk, draf visual) yang menyimpannya secara fisik di folder lokal (misal: `/public/uploads`) atau gunakan *Local S3-compatible server* seperti **MinIO**.
-- [ ] **Refactor API Routes:** Hapus semua *import* `import { supabase } from '@/lib/supabase'` di seluruh aplikasi (`src/app/api/...` dan komponen UI) dan ganti dengan *queries* menggunakan ORM.
+### Phase 0.5: Full Migration to PostgreSQL & Prisma (No Supabase) ⏳
+- [x] Uninstall `@supabase/supabase-js` & remove `src/lib/supabase.ts`
+- [x] Setup NextAuth.js (Credentials provider) dan `src/lib/auth.ts`
+- [x] Refactor existing Pages (Brands, Workspace, Auth) to use Prisma APIs
+- [x] Refactor remaining pages (Products, Campaigns, Topics, Settings) to use Prisma APIs
+- [x] Setup local storage logic (via Next.js API route `fs` or `minio`) untuk `product_images`
+- [x] Test end-to-end user flow (Signup -> Create Workspace -> Create Brand -> Generate Content)
 
 ---
 
