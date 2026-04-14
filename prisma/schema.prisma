@@ -44,6 +44,9 @@ model Workspace {
   campaigns     Campaign[]
   invitations   WorkspaceInvitation[]
   calendarItems CalendarItem[]
+  contentTopics ContentTopic[]
+  generationRequests GenerationRequest[]
+  generationOutputs  GenerationOutput[]
 }
 
 model UserWorkspaceRole {
@@ -89,6 +92,8 @@ model Brand {
   products      Product[]
   brainVersions BrandBrainVersion[]
   campaigns     Campaign[]
+  contentTopics ContentTopic[]
+  generationRequests GenerationRequest[]
 
   @@unique([workspace_id, slug])
 }
@@ -138,6 +143,8 @@ model Product {
   creator       User?     @relation("ProductCreator", fields: [created_by], references: [id])
   brainVersions ProductBrainVersion[]
   campaigns     Campaign[]
+  contentTopics ContentTopic[]
+  generationRequests GenerationRequest[]
 }
 
 model ProductBrainVersion {
@@ -227,4 +234,72 @@ model CalendarItem {
 
   workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   campaign     Campaign? @relation(fields: [campaign_id], references: [id])
+}
+
+model ContentTopic {
+  id              String    @id @default(uuid())
+  workspace_id    String
+  brand_id        String
+  product_id      String?
+  content_title   String
+  content_pillar  String?
+  content_format  String?
+  platform        String?
+  objective       String?
+  publish_date    DateTime? @db.Date
+  status          String    @default("draft")
+  created_by      String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  brand     Brand     @relation(fields: [brand_id], references: [id])
+  product   Product?  @relation(fields: [product_id], references: [id])
+}
+
+model GenerationRequest {
+  id                     String    @id @default(uuid())
+  workspace_id           String
+  brand_id               String
+  product_id             String?
+  platform               String?
+  output_format          String?
+  objective              String?
+  framework_id           String?
+  hook_type_id           String?
+  tone_override          String?
+  visual_style           String?
+  output_length          String?
+  additional_context     String?
+  source_context_summary String?
+  status                 String    @default("draft")
+  created_by             String?
+  created_at             DateTime  @default(now())
+
+  workspace        Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  brand            Brand              @relation(fields: [brand_id], references: [id])
+  product          Product?           @relation(fields: [product_id], references: [id])
+  generationOutputs GenerationOutput[]
+}
+
+model GenerationOutput {
+  id               String    @id @default(uuid())
+  request_id       String
+  workspace_id     String
+  content_title    String?
+  copy_on_visual   String?
+  caption          String?
+  slides           Json?
+  scenes           Json?
+  cta_options      Json?
+  hashtag_pack     Json?
+  visual_direction String?
+  rationale        String?
+  raw_response     Json?
+  status           String    @default("draft")
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+
+  request   GenerationRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  workspace Workspace         @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 }

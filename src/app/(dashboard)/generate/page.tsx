@@ -6,8 +6,8 @@ import {
   ToggleLeft, ToggleRight, Info, Brain, Package, Save,
   Plus, Trash2, Film, Layers, Monitor, type LucideIcon
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { useSession } from 'next-auth/react'
 
 // ─── Platform → Available Formats ────────────────────────────────────────────
 const platformFormats: Record<string, { label: string; icon: string; isVideo: boolean; isCarousel: boolean }[]> = {
@@ -210,25 +210,39 @@ export default function GeneratePage() {
   })
 
   const { workspaceId } = useWorkspace()
+  const { data: session } = useSession()
   const [userId, setUserId] = useState<string | null>(null)
   const [brands, setBrands] = useState<DBBrand[]>([])
   const [products, setProducts] = useState<DBProduct[]>([])
 
   useEffect(() => {
-    if (!workspaceId) return
+    if (!workspaceId || !session?.user) return
     async function initData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserId(user.id)
+      setUserId((session.user as any).id)
 
-      const { data: bData } = await supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, brand_values, brand_promise, source_summary, audience_persona, messaging_rules)').eq('workspace_id', workspaceId)
-      if (bData) setBrands(bData as DBBrand[])
+      const [bDataRes, pDataRes] = await Promise.all([
+        fetch(`/api/brands?workspaceId=${workspaceId}`),
+        fetch(`/api/products?workspaceId=${workspaceId}`)
+      ])
 
-      const { data: pData } = await supabase.from('products').select('id, brand_id, name, product_brain_versions(usp, functional_benefits)').eq('workspace_id', workspaceId)
-      if (pData) setProducts(pData as DBProduct[])
+      if (bDataRes.ok) {
+        const brandsData = await bDataRes.json()
+        setBrands(brandsData.map((b: any) => ({
+          ...b,
+          brand_brain_versions: b.brain ? [b.brain] : []
+        })))
+      }
+
+      if (pDataRes.ok) {
+        const productsData = await pDataRes.json()
+        setProducts(productsData.map((p: any) => ({
+          ...p,
+          product_brain_versions: p.brain ? [p.brain] : []
+        })))
+      }
     }
     initData()
-  }, [workspaceId])
+  }, [workspaceId, session?.user])
 
   // Apply URL params (from Topic Generator / Topic Library) after data loads
   useEffect(() => {
@@ -389,33 +403,22 @@ export default function GeneratePage() {
     setSavingLibrary(true)
 
     try {
-      const { data: reqData, error: reqErr } = await supabase.from('generation_requests').insert({
+      const hashtagPack = editHashtags.trim()
+        ? editHashtags.trim().split(/\s+/).filter(Boolean)
+        : (output.hashtag_pack || null)
+
+      const payload = {
         workspace_id: workspaceId,
         brand_id: selectedBrand.id,
         product_id: isGeneralMode ? null : (selectedProduct?.id ?? null),
         platform: form.platform,
         output_format: form.outputFormat,
         objective: form.objective,
-        framework_id: null,
-        hook_type_id: null,
         tone_override: form.tone,
         visual_style: form.visualStyle,
         output_length: form.outputLength,
         additional_context: form.additionalContext,
         source_context_summary: `Brand: ${selectedBrand.name}, Product: ${isGeneralMode ? 'General' : (selectedProduct?.name ?? '')}, Format: ${form.outputFormat}, Framework: ${form.framework || 'PAS'}`,
-        status: 'completed',
-        created_by: userId
-      }).select('id').single()
-
-      if (reqErr) throw reqErr
-
-      const hashtagPack = editHashtags.trim()
-        ? editHashtags.trim().split(/\s+/).filter(Boolean)
-        : (output.hashtag_pack || null)
-
-      const { error: outErr } = await supabase.from('generation_outputs').insert({
-        request_id: reqData.id,
-        workspace_id: workspaceId,
         content_title: editableTitle || output.content_title || null,
         copy_on_visual: editCopyOnVisual || null,
         caption: editCaption || null,
@@ -425,11 +428,16 @@ export default function GeneratePage() {
         hashtag_pack: hashtagPack,
         visual_direction: editVisualDirection || null,
         rationale: editRationale || null,
-        raw_response: output,
-        status: 'approved'
+        raw_response: output
+      }
+
+      const res = await fetch('/api/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       })
 
-      if (outErr) throw outErr
+      if (!res.ok) throw new Error('Failed to save generation')
       setLibrarySaved(true)
     } catch (e: any) {
       alert('Failed to save to library: ' + e.message)

@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { Library, Search, CheckCircle2, Clock, XCircle, Copy, ChevronDown, Heart, MessageCircle, Send, Bookmark, Repeat2, BarChart2, Image, ThumbsUp, Share2, Play } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 type Status = 'approved' | 'draft' | 'rejected'
@@ -51,29 +50,17 @@ export default function LibraryPage() {
   const loadData = useCallback(async () => {
     if (!workspaceId) return
     setLoading(true)
-    const wsId = workspaceId
-
-    const { data, error } = await supabase
-      .from('generation_outputs')
-      .select(`
-        id, content_title, copy_on_visual, caption, slides, scenes, cta_options, hashtag_pack, visual_direction, status, created_at,
-        request:generation_requests (
-          platform,
-          output_format,
-          brand:brands(name),
-          product:products(name)
-        )
-      `)
-      .eq('workspace_id', wsId)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      const parsed = data.map((d: any) => ({
-        ...d,
-        request: Array.isArray(d.request) ? d.request[0] : d.request
-      }))
-      setItems(parsed)
+    
+    try {
+      const res = await fetch(`/api/generations/list?workspaceId=${workspaceId}`)
+      if (!res.ok) throw new Error('Failed to fetch generations')
+      
+      const data = await res.json()
+      setItems(data)
+    } catch (err) {
+      console.error(err)
     }
+    
     setLoading(false)
   }, [workspaceId])
 
@@ -97,9 +84,20 @@ export default function LibraryPage() {
 
   const updateStatus = async (id: string, newStatus: Status) => {
     setUpdatingStatus(true)
-    await supabase.from('generation_outputs').update({ status: newStatus }).eq('id', id)
-    setItems(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i))
-    setMockupItem(prev => prev?.id === id ? { ...prev, status: newStatus } : prev)
+    try {
+      const res = await fetch(`/api/generations/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+      if (!res.ok) throw new Error('Failed to update status')
+      
+      setItems(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i))
+      setMockupItem(prev => prev?.id === id ? { ...prev, status: newStatus } : prev)
+    } catch (err) {
+      console.error(err)
+      alert('Error updating status')
+    }
     setUpdatingStatus(false)
   }
 

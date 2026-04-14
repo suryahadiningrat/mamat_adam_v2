@@ -4,7 +4,6 @@ import {
   BookOpen, Tag, Layout, Calendar, Trash2, ArrowRight,
   ChevronDown, RefreshCw, Brain, Layers
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 
 type Topic = {
@@ -78,39 +77,25 @@ export default function TopicLibraryPage() {
     setLoading(true)
     setError(null)
     try {
-      const wsId = workspaceId
+      let url = `/api/topics?workspaceId=${workspaceId}`
+      if (filterPlatform) url += `&platform=${filterPlatform}`
+      if (filterStatus) url += `&status=${filterStatus}`
 
-      let query = supabase
-        .from('content_topics')
-        .select('*, brands(name), products(name)')
-        .eq('workspace_id', wsId)
-        .order('publish_date', { ascending: true })
-
-      if (filterPlatform) query = query.eq('platform', filterPlatform)
-      if (filterStatus)   query = query.eq('status', filterStatus)
-
-      const { data, error: qErr } = await query
-
-      if (qErr) {
-        if (qErr.message?.includes('schema cache') || qErr.message?.includes('content_topics')) {
-          setError('TABLE_MISSING')
-        } else {
-          setError(qErr.message)
-        }
-        setLoading(false)
-        return
-      }
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Failed to fetch topics')
+      
+      const data = await res.json()
 
       // Group by brand
       const brandMap: Record<string, BrandGroup> = {}
       for (const row of data || []) {
         const brandId = row.brand_id || '__none__'
-        const brandName = (row.brands as any)?.name || 'Unknown Brand'
+        const brandName = row.brand?.name || 'Unknown Brand'
         if (!brandMap[brandId]) brandMap[brandId] = { brand_id: brandId, brand_name: brandName, topics: [] }
         brandMap[brandId].topics.push({
           ...row,
           brand_name: brandName,
-          product_name: (row.products as any)?.name || null,
+          product_name: row.product?.name || null,
         })
       }
       setGroups(Object.values(brandMap))
@@ -126,7 +111,7 @@ export default function TopicLibraryPage() {
   async function handleDelete(topicId: string) {
     if (!confirm('Delete this topic?')) return
     setDeleting(topicId)
-    await supabase.from('content_topics').delete().eq('id', topicId)
+    await fetch(`/api/topics/${topicId}`, { method: 'DELETE' })
     setGroups(prev => prev
       .map(g => ({ ...g, topics: g.topics.filter(t => t.id !== topicId) }))
       .filter(g => g.topics.length > 0)
@@ -135,7 +120,11 @@ export default function TopicLibraryPage() {
   }
 
   async function handleStatusChange(topicId: string, status: string) {
-    await supabase.from('content_topics').update({ status }).eq('id', topicId)
+    await fetch(`/api/topics/${topicId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
     setGroups(prev => prev.map(g => ({
       ...g, topics: g.topics.map(t => t.id === topicId ? { ...t, status } : t)
     })))

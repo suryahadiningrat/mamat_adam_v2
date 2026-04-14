@@ -4,8 +4,8 @@ import {
   Layers, Sparkles, RefreshCw, Brain, ChevronDown,
   Calendar, Tag, Layout, Trash2, CheckCircle2, ArrowRight, Save
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { useSession } from 'next-auth/react'
 
 const platforms = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'LinkedIn', 'Facebook']
 
@@ -96,21 +96,37 @@ export default function TopicsPage() {
   const [saving, setSaving] = useState(false)
   const [allSaved, setAllSaved] = useState(false)
 
+  const { data: session } = useSession()
+
   useEffect(() => {
-    if (!workspaceId) return
+    if (!workspaceId || !session?.user) return
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserId(user.id)
-      const [{ data: bData }, { data: pData }] = await Promise.all([
-        supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, audience_persona, messaging_rules, source_summary, brand_promise)').eq('workspace_id', workspaceId),
-        supabase.from('products').select('id, brand_id, name, product_brain_versions(usp)').eq('workspace_id', workspaceId)
+      if (!session?.user) return
+      setUserId((session.user as any).id)
+      
+      const [bDataRes, pDataRes] = await Promise.all([
+        fetch(`/api/brands?workspaceId=${workspaceId}`),
+        fetch(`/api/products?workspaceId=${workspaceId}`)
       ])
-      if (bData) setBrands(bData as DBBrand[])
-      if (pData) setProducts(pData as DBProduct[])
+
+      if (bDataRes.ok) {
+        const brandsData = await bDataRes.json()
+        setBrands(brandsData.map((b: any) => ({
+          ...b,
+          brand_brain_versions: b.brain ? [b.brain] : []
+        })))
+      }
+
+      if (pDataRes.ok) {
+        const productsData = await pDataRes.json()
+        setProducts(productsData.map((p: any) => ({
+          ...p,
+          product_brain_versions: p.brain ? [p.brain] : []
+        })))
+      }
     }
     init()
-  }, [workspaceId])
+  }, [workspaceId, session?.user])
 
   const selectedBrand = brands.find(b => b.id === form.brandId)
   const availableProducts = products.filter(p => p.brand_id === form.brandId)
@@ -188,19 +204,21 @@ export default function TopicsPage() {
         objective: form.objective || null,
         publish_date: t.publish_date || null,
         status: 'approved',
-        created_by: userId,
       }))
-      const { error } = await supabase.from('content_topics').insert(rows)
-      if (error) throw error
+      
+      const res = await fetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topics: rows })
+      })
+
+      if (!res.ok) throw new Error('Failed to save topics')
+      
       setTopics(prev => prev.map(t => ({ ...t, saved: true })))
       setAllSaved(true)
     } catch (e: any) {
       const msg = e.message || ''
-      if (msg.includes('schema cache') || msg.includes('relation "content_topics" does not exist')) {
-        alert('Table not found.\n\nPlease run migrate_content_topics.sql in your Supabase SQL Editor first, then try again.')
-      } else {
-        alert('Save failed: ' + msg)
-      }
+      alert('Save failed: ' + msg)
     } finally {
       setSaving(false)
     }
