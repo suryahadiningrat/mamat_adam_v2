@@ -5,7 +5,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   LayoutDashboard, Brain, Package, Zap, Megaphone,
   Library, Lightbulb, Settings, ChevronDown, LogOut, Layers, BookOpen, Crown,
-  Plus, Check, Building2, X, Loader2
+  Plus, Check, Building2, X, Loader2, CalendarDays
 } from 'lucide-react'
 
 export default function Sidebar() {
@@ -141,7 +141,8 @@ export default function Sidebar() {
     { divider: true, label: 'Core' },
     { icon: Brain, label: 'Brand Brain', href: '/brands', badge: counts.brands },
     { icon: Package, label: 'Product Brain', href: '/products', badge: counts.products },
-    { divider: true, label: 'Generate' },
+    { divider: true, label: 'Plan & Generate' },
+    { icon: CalendarDays, label: 'Content Calendar', href: '/calendar' },
     { icon: Layers, label: 'Topic Generator', href: '/topics' },
     { icon: Zap, label: 'Content Generator', href: '/generate' },
     { icon: Megaphone, label: 'Campaign Generator', href: '/campaigns' },

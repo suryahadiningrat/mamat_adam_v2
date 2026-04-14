@@ -5,16 +5,19 @@ Internal/SaaS web application for marketing teams to auto-generate social media 
 
 ## Core Concepts
 
-### Workspace
-All data is workspace-scoped. Every brand, product, generation, and campaign belongs to one workspace.
+### Workspace (Project)
+All data is workspace-scoped (referred to as Projects per client/brand). Every brand, product, generation, and campaign belongs to one workspace.
 
-### Roles
-- **Admin** — manages workspace settings, billing, team invites, and has full access to content.
-- **Editor** — creates and edits content, brands, and products.
-- **Viewer** — read-only access.
-- **Superadmin** — manages all workspaces (internal team).
+### Roles & Collaboration Model
+Selain role sistem dasar (Admin, Editor, Viewer, Superadmin), aplikasi dirancang untuk mendukung alur kerja tim agensi:
+- **Admin (CEO / Ops Lead)** — mengelola workspace, billing, pengaturan AI *default*, dan anggota tim.
+- **Account** — mengelola persetujuan (*approval*) klien, serta akses pembagian ekspor konten.
+- **Strategist** — merancang *campaign*, merencanakan kalender konten, membuat ide topik, dan menugaskan draf.
+- **Content (Copywriter)** — menulis/mengedit draf, dan mengubah topik menjadi *copy* atau skrip video yang siap tayang.
+- **Production (Designer/Video)** — menerima *production briefs* (termasuk *image prompts* AI) dan mengunggah *assets*.
+- **Data/Analyst** — mencatat metrik performa (*insights*) ke dalam sistem untuk bahan pembelajaran (*feedback loop*).
 
-### Brand Brain
+### Brand Brain & Product Brain (Brand IQ)
 Each brand has its own identity: name, summary, tone of voice, personality, target audience, values, USP, content pillars, marketing strategy, and do's/don'ts.
 
 ### Product Brain
@@ -23,9 +26,16 @@ Each product has its own context: name, type, USP, RTB (Reason to Believe), func
 ### AI Scraping
 Users can paste URLs (website, social media) and the system will use Jina Reader + Claude Haiku to extract and populate Brand/Product Brain fields automatically.
 
-### Generation & Prompts
-Content generation saat ini menggunakan Anthropic Claude Sonnet 4 dengan prompt caching. *The Brand and Product contexts* dikirim sebagai *ephemeral cached blocks* untuk menghemat token pada *repeat generations*.
-> **Penting (Mendatang):** Ada rencana migrasi ke model **Local AI (Gemma)** via Ollama untuk menggantikan ketergantungan pada API Anthropic guna memangkas biaya API.
+### Generation & Grounding (AI Pipeline)
+Sistem memiliki 3 langkah utama (*core loop*):
+1. **Calendar:** Merencanakan jadwal publikasi, *channel*, dan objektif di tampilan kalender visual (*month/week grid*).
+2. **Topics:** *Drawer* AI (*Guided choice*) yang mengusulkan topik dari referensi Campaign/Brand. Pengguna memilih satu untuk dikembangkan.
+3. **Content Editor:** Ruang kerja berbasis *block-editor* (Hook, Problem, Value, CTA, Production Notes). Di sini, AI bisa me-*regenerate* blok secara terpisah.
+
+*Grounding* dilakukan melalui **Prompt Caching** (fase MVP) menggunakan Anthropic Claude Sonnet 4 atau Local Gemma, dengan menyuntikkan seluruh *Brand/Product IQ* ke *system prompt*. Pada Fase lanjutan, *semantic search* menggunakan `pgvector` akan diimplementasikan.
+
+### Image Generation (Async)
+FCE juga mendukung pembuatan draf visual (*production briefs*) menggunakan **KIE.ai**. Pengguna membuat permintaan (mengembalikan `task_id`), lalu sistem melakukan *polling* secara asinkron (*background*) sampai gambar selesai dan disimpan ke Storage.
 
 ---
 

@@ -11,6 +11,8 @@
 | Storage | Supabase Storage | `product_images` bucket |
 | Auth | Supabase Auth | email + password |
 | AI — Text | Anthropic Claude API / Local Gemma | Claude 3.5 Sonnet & Haiku / Local Gemma via Ollama |
+| AI — Image | KIE.ai (Planned) | Async generation via `task_id` polling |
+| AI — Vector | pgvector (Planned) | For semantic search in Brand IQ Phase 2 |
 | Scraping | Jina Reader (r.jina.ai) | Markdown conversion |
 | Hosting | Vercel | |
 

@@ -78,3 +78,29 @@
 - [x] **Scraping Fallback:** Sesuaikan endpoint `/api/scrape-brand` agar Gemma mampu mengekstrak JSON dengan stabil dari hasil Jina Reader jika menggantikan peran `Claude Haiku`.
 - [x] **Performance & Context Testing:** Evaluasi *latency* (waktu respons via jaringan lokal), batas token *context window* server lokal (karena Brand Brain memakan banyak token), dan konsistensi struktur JSON.
 - [ ] **UI Update:** (Opsional) Tambahkan opsi "AI Engine: Cloud / Local Server" di halaman Workspace Settings.
+
+---
+
+## Phase 8 — Content Calendar & Pipeline (Visual Planner)
+**Tujuan:** Mengubah *dashboard* menjadi "Command Center" visual (*month/week grid*) yang menghubungkan Kampanye, Topik, dan Draf (mengacu pada PRD).
+- [x] Buat tabel `calendar_items` (tanggal tayang, *channel*, status, `owner_id`, `campaign_id`).
+- [x] Buat UI Calendar (Month & Week view).
+- [x] Integrasikan fungsionalitas klik pada kalender untuk membuka *drawer/side panel* detail konten (Assignee, Status, dll).
+
+## Phase 9 — Modular Content Editor (Block-based) 🚧 BACKLOG
+**Tujuan:** Mengubah editor draf tunggal (*single JSON text*) menjadi editor modular berdasarkan struktur PRD (Hook, Body, Notes).
+- [ ] Rancang UI editor yang memisahkan konten ke dalam blok-blok.
+- [ ] Integrasikan fitur AI "Regenerate this block" atau "Make it shorter/funnier" khusus untuk satu blok tanpa merusak keseluruhan draf.
+- [ ] Implementasi tabel/relasi `drafts` yang mendukung pelacakan versi.
+
+## Phase 10 — Image Generation (Async) 🚧 BACKLOG
+**Tujuan:** Mendukung draf visual menggunakan AI gambar (*KIE.ai* atau serupa).
+- [ ] Buat API Endpoint untuk men-*trigger* `task_id` pembuatan gambar secara asinkron.
+- [ ] Buat API/Cron/Client-polling untuk mengecek status `task_id`.
+- [ ] Sediakan UI State: "Generating...", *skeleton loader*, hingga gambar diunduh dan dipindah ke Supabase Storage.
+
+## Phase 11 — Feedback Loop & Advanced Grounding 🚧 BACKLOG
+**Tujuan:** Mewujudkan *Continuous Improvement Loop* dan penarikan konteks lanjutan (Phase 2 PRD).
+- [ ] Buat UI untuk memberi *rating* atau *reason tags* pada setiap *output* (tersimpan di `output_feedback_events`).
+- [ ] Implementasi ekstensi `pgvector` di PostgreSQL/Supabase.
+- [ ] Refaktor mesin *generation* untuk mengambil *chunks* referensi dokumen secara dinamis menggunakan *vector similarity search* ketika *Brand IQ* terlalu besar.

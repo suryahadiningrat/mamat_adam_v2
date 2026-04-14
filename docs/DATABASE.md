@@ -17,8 +17,12 @@ All core tables use workspace-scoped Row Level Security (RLS). Users can only ac
 | \`generation_requests\` | Metadata for generation API calls |
 | \`generation_outputs\` | Actual generated content |
 | \`content_topics\` | Saved bulk topic calendar items |
-| \`campaigns\` | Campaign strategy entities |
-| \`campaign_outputs\` | Generated campaign strategy briefs |
+| `campaigns` | Campaign strategy entities |
+| `campaign_outputs` | Generated campaign strategy briefs |
+| `output_feedback_events` | Logs for user edits/ratings to create a feedback loop |
+| `calendar_items` | *(Planned)* Visual calendar grid metadata and scheduling |
+| `drafts` | *(Planned)* Modular text blocks for per-block AI regeneration |
+| `assets` | *(Planned)* Media (image/video) tracking with metadata |
 
 ---
 
