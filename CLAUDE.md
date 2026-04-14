@@ -2,7 +2,7 @@
 
 > This file is auto-loaded by Claude Code at the start of every session.
 > Any AI assistant should read this file first before touching any code.
-> Last updated: 2026-04-10
+> Last updated: 2026-04-14
 
 ---
 
@@ -40,6 +40,7 @@ src/
       generate/           ← POST: single content generation via Claude
       generate-topics/    ← POST: bulk topic generation via Claude
       generate-campaign/  ← POST: campaign brief generation via Claude
+      generate-sketch/    ← POST: AI image via pollinations.ai → returns Base64 data URI
       scrape-brand/       ← POST: fetch URL → extract brand info via Claude
       scrape-product/     ← POST: fetch URL → extract product info via Claude
       scrape-url/         ← POST: fetch any URL → structured summary for reference context
@@ -100,6 +101,14 @@ All routes at `/api/*`:
 ### 6. RLS / silent failures
 Supabase UPDATE blocked by RLS returns success with 0 rows (no error thrown).
 Always check `count` or re-fetch to confirm writes landed.
+
+### 7. Image generation pattern (`/api/generate-sketch`)
+Do not store generated images in Supabase Storage — RLS blocks server-side uploads.
+Always return images as Base64 data URIs from the API. Key rules:
+- Build the prompt with `buildSketchPrompt(rawPrompt)` in `generate/page.tsx` — this prefixes every request with `[Context: Brand, Product, Content, Platform]` to prevent subject drift across a batch
+- The quality booster suffix is appended *after* the user prompt in the API, so it never overrides the visual direction
+- `sketchUrl` values are Base64 strings — they can be very large. They are stored in `raw_response.sketchUrl` (single), `slides[n].sketch_url`, or `scenes[n].sketch_url` in the DB
+- Library mockups detect the format (`output_format` field) to pick the right mockup component: Carousel → slide slider, Reel/Video → `VideoSceneCarousel`, Static → single image
 
 ---
 

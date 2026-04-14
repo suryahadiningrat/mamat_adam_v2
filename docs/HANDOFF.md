@@ -13,21 +13,24 @@ At the end of any session, ask your AI:
 
 ---
 
-## Last Updated: 2026-04-10
+## Last Updated: 2026-04-14
 
-### Completed This Session
-- **Documentation centralized** — all docs moved into `docs/` folder:
-  - `DOCUMENTATION.md` → `docs/DOCUMENTATION.md` (updated with all features from this session)
-  - `DEPLOYMENT.md` → `docs/DEPLOYMENT.md`
-  - `CLAUDE.md` stays at root (required for Claude Code auto-loading)
-  - `CLAUDE.md` updated to point to `docs/DEPLOYMENT.md` and `docs/DOCUMENTATION.md`
-- **Session start/end prompts created** — two reusable prompts for efficient AI context loading and end-of-session doc updates (stored outside repo, in user's notes)
-- **Fixed `scrape-brand` "Could not extract meaningful content" error**:
-  - Root cause: Jina Reader (`r.jina.ai`) rate-limits aggressively without an API key, returning near-empty responses that pass the HTTP check but fail the content length check
-  - Fix: `fetchWithFallback()` function added — tries Jina first, falls back to direct fetch + HTML stripping (same approach as `scrape-url`) if Jina returns < 200 chars
-  - File changed: `src/app/api/scrape-brand/route.ts`
+### Completed This Session (2026-04-14)
 
-### Completed in Previous Session
+**AI Sketch / Image Generation — full refactor & quality improvements:**
+- **Image generation prompt overhaul:** Removed the conflicting `flux-anime` model and storyboard sketch wrapper that fought against Claude's visual direction. Now uses the standard `flux` model at `768×768` with professional advertising photography quality boosters appended.
+- **Context-aware image prompts (`buildSketchPrompt`):** Every sketch prompt (single, slide, scene) is now prefixed with `[Context: Brand: X, Product: Y, Content: Z, Platform: P]` so that all images across a carousel or video storyboard stay subject-consistent (e.g. always motorcycle, not car).
+- **Button labels updated:** All "Sketch" / "Generate Sketch" / "Regenerate Sketch" labels renamed to "Draw Image" / "Redraw Image" throughout `generate/page.tsx`.
+- **Revision notes for Redraw:** After any image is generated, a revision textarea appears above the "Redraw" button for slides and scenes. Notes are appended to the prompt as `Revise: [notes]`.
+
+**Content Library — mockup layout improvements:**
+- **Instagram Carousel mockup:** Replaced static single image with a horizontal scroll-snap slider. Each slide shows its `sketch_url` with a `1/7` counter badge. Left/right chevron buttons added for desktop navigation.
+- **TikTok + YouTube → Video Storyboard Carousel:** Both mockups rebuilt as `VideoSceneCarousel` — shared component that iterates over `item.scenes`, showing per-scene: `16:9` image panel (with scene badge + counter), Script text, visual direction in italic below. Prev/next arrow buttons overlaid.
+- **Instagram Reels mockup:** Added `InstagramReelsMockup` component. `renderMockup()` now detects when platform = Instagram AND output_format contains "reel" or "video" and routes to the storyboard carousel view instead of the static image mockup.
+- **Sketch URLs saved to DB:** When "Save to Library" is clicked in the generator, `sketchUrl` is now merged into `raw_response` JSONB (`{ ...output, sketchUrl }`), persisting it for library rendering.
+- **Library fetches `raw_response`:** The Supabase select query in `library/page.tsx` now includes `raw_response` so that saved sketch URLs can be rendered in mockups.
+
+### Completed in Previous Sessions
 - Reference URL feature fully implemented for both Topic Generator and Content Generator
   - `/api/scrape-url` — fetches page, strips HTML, extracts structured data via Claude Haiku
   - Returns: `title`, `content_type`, `main_topic`, `key_claims`, `tone`, `content_angles`, `contextString`
@@ -62,23 +65,26 @@ All 11 pages are functional and wired to Supabase + Claude:
 ### Pending / Next Up
 
 **High priority:**
-- [ ] Brand Brain comprehensive redesign (plan exists at `~/.claude/plans/enumerated-singing-forest.md`)
-  - Fix orphaned brands (workspace_id = null not appearing)
-  - Add full brand form: website scrape, tone, pillars, platforms, dos/donts
-  - Update generate page to pass full brand payload
+- [ ] **All-slides/all-scenes batch "Draw Image" button** — currently each slide/scene must be drawn individually. Add a single "Draw All Images" button that queues all in sequence.
+- [ ] **Sketch revision for single image** — the single-image (non-carousel) view doesn't yet have a revision textarea like slides/scenes do. Add parity.
+- [ ] **Library: Facebook Reels** — `renderMockup` doesn't have a Facebook-specific handler yet. Currently falls back to `GenericMockup`.
 - [ ] Favicon — user asked for it, not implemented yet (needs logo file at `public/floothink-logo.png`)
 
 **Medium priority:**
-- [ ] Image generation integration — user has kie.ai API key, waiting on API docs
 - [ ] Apply any pending SQL migrations (check `fix_rls_patch.sql` if workspace SELECT issues appear)
 - [ ] Consider adding Jina API key to env vars (`JINA_API_KEY`) for higher rate limits on brand/product scraping — currently free-tier Jina is unreliable
+- [ ] Library: LinkedIn and Twitter carousel mockups don't yet have the multi-slide storyboard view — only Instagram and Twitter single-image do.
 
 **Low priority / Future:**
 - [ ] PDF reference support in scrape-url (currently returns error for PDFs)
 - [ ] Social media URL scraping (currently blocked by auth walls)
+- [ ] Admin API key for auto monthly cost sync (pending user provision of key)
 
 ### Gotchas & Known Issues
 
+- **Image generation prompt vs. visual direction conflict:** The old `flux-anime` wrapper prepended "storyboard sketch, black and white line art" which directly contradicted Claude's rich visual direction output (e.g. "warm orange gradient"). Now fixed — the prompt trusts the visual direction and appends quality boosters only.
+- **Subject drift across images:** Without the `buildSketchPrompt` context header, the AI defaults to the most generic interpretation of a scene (car instead of motorcycle). Always make sure `buildSketchPrompt()` is called in `handleGenerateSketch` — do not pass raw `promptText` directly to the fetch.
+- **`sketchUrl` is Base64 data URI:** The `/api/generate-sketch` route returns a Base64-encoded image (not a Supabase Storage URL). Do not try to parse it as a URL or upload it. Saved into `raw_response.sketchUrl` in the DB as a full base64 string — can be very large.
 - **Jina Reader rate limits**: `r.jina.ai` is used in `scrape-brand` and `scrape-product` to fetch URLs. Without a `JINA_API_KEY`, it rate-limits aggressively and returns near-empty responses (HTTP 200 but < 200 chars). `scrape-brand` now has a direct-fetch fallback. `scrape-product` uses the same Jina-only pattern — if the same error appears there, apply the same `fetchWithFallback` fix.
 - **Supabase RLS silent failures**: UPDATE blocked by RLS returns success, 0 rows affected. Always re-fetch to confirm.
 - **Brand Brain `messaging_rules` JSONB**: Extended brand fields (industry, website, content_pillars, dos, donts, etc.) live inside this single JSONB column. Use `parseExt()` in both page and API files.
@@ -87,6 +93,7 @@ All 11 pages are functional and wired to Supabase + Claude:
 - **Dark mode logo inversion**: `[data-theme='dark'] .sidebar-logo img { filter: brightness(0) invert(1) }` — auto-converts purple logo to white.
 - **`content_topics.objective` column**: Was missing originally, needed `ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS objective varchar(100)` — should already be applied.
 - **Workspace brands not showing**: Brands created before workspace fix have `workspace_id = null`. Heal query in brands page must NOT filter by `created_by` or it blocks the heal.
+- **`useRef` in inner functions**: `VideoSceneCarousel`, `InstagramMockup`, and `TwitterMockup` are inner functions inside `LibraryPage`. They use `useRef` correctly because they are React function components rendered via JSX — this works fine. Do not hoist them outside the parent component as they depend on `item` from closure.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > Deep-dive into how the system is designed. Read this when adding new features,
 > debugging data flow, or making architectural decisions.
-> Last updated: 2026-04-10
+> Last updated: 2026-04-14
 
 ---
 
@@ -142,6 +142,25 @@ User pastes URL → clicks "Analyze"
   → At least half of generated topics should reflect reference content
 ```
 
+### AI Image Generation (`/api/generate-sketch`)
+```
+User clicks "Draw Image" on a slide / scene / single post
+  → generate/page.tsx calls buildSketchPrompt(rawVisualDirection)
+      → prepends [Context: Brand, Product, Content, Platform]
+        ensuring all images in a batch share the same subject matter
+  → POST /api/generate-sketch { prompt: enrichedPrompt }
+      → appends quality booster suffix (photography/commercial terms)
+      → server-side fetch from image.pollinations.ai (flux model, 768×768)
+      → downloads image bytes → converts to Base64 data URI
+      → returns { success, sketchUrl: "data:image/jpeg;base64,..." }
+  → UI stores sketchUrl in local state:
+      - Single post   → sketchUrl state → saved in raw_response.sketchUrl
+      - Carousel slide → slideSketches[idx] → updateSlide → saved in slides[n].sketch_url
+      - Video scene   → sceneSketches[idx] → updateScene → saved in scenes[n].sketch_url
+  → "Save to Library" bundles all sketch URLs into the DB record
+  → Library mockups read sketch URLs from DB and render in platform UI frames
+```
+
 ### Marketing Skills (`src/lib/skills/index.ts`)
 `copywritingSkill` and `socialContentSkill` are injected verbatim into every generation prompt inside `<copywriting_skill>` and `<social_content_skill>` XML tags. These are large pre-written marketing framework texts — they significantly improve output quality.
 
@@ -226,3 +245,6 @@ Migrations are stored as `.sql` files in the project root (not in a migrations f
 | `position: fixed` sidebar dropdown | Sidebar `overflow-y: auto` clips `position: absolute` children |
 | Haiku for topics/scraping, Sonnet for content generation | Topics and scraping need speed + low cost; full content generation needs quality |
 | Skills injected as XML tags in prompts | Claude handles XML-delimited context better than plain text injection |
+| Base64 Data URI for generated images (not Supabase Storage) | Supabase Storage RLS policies blocked uploads from server-side API routes; Base64 sidesteps storage entirely and is rendered natively by the browser |
+| Context-prefix pattern in sketch prompts (`buildSketchPrompt`) | Without brand/product context, the image AI defaults to generic subjects (e.g. car instead of motorcycle). Prefixing every prompt with `[Context: Brand, Product, Content]` anchors all images to the correct subject across a batch |
+| Inner-function React components in library/page.tsx | `VideoSceneCarousel`, `InstagramMockup` etc. are defined as sub-functions inside `LibraryPage` so they can close over shared helpers. They use `useRef` correctly because they render as JSX components |

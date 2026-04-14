@@ -1,7 +1,7 @@
 # FCE Dashboard — Developer Documentation
 
 > **FCE (Floothink Content Engine)** — AI-powered social media content generation platform for brand marketing.  
-> Last updated: 2026-04-10
+> Last updated: 2026-04-14
 
 ---
 
@@ -85,6 +85,7 @@ src/
 │   │   ├── generate/         # POST — single content generation
 │   │   ├── generate-topics/  # POST — bulk topic generation
 │   │   ├── generate-campaign/# POST — campaign strategy
+│   │   ├── generate-sketch/  # POST — AI image generation (Base64 Data URI output)
 │   │   ├── scrape-brand/     # POST — brand info from URLs
 │   │   ├── scrape-product/   # POST — product info from URLs
 │   │   └── scrape-url/       # POST — fetch any URL → structured summary for reference context
@@ -298,7 +299,8 @@ cta_options jsonb           -- array of call-to-action variants
 hashtag_pack jsonb          -- array of hashtags
 visual_direction text       -- art direction notes
 rationale text              -- AI explanation of creative decisions
-raw_response jsonb          -- full unparsed Claude response
+raw_response jsonb          -- full unparsed Claude response + sketchUrl if image was generated
+                            -- shape: { ...claudeOutput, sketchUrl?: string (Base64 data URI) }
 status varchar(30)          -- 'draft' | 'approved' | 'rejected'
 edited_copy_on_visual text  -- user-edited version
 edited_caption text
@@ -457,7 +459,11 @@ The primary content creation workflow.
 - Generate button → calls `/api/generate`
 - **All output fields are editable** before saving (copy on visual, caption, CTAs, hashtags, visual direction, rationale)
 - **Regenerate with context**: opens a revision textarea — user describes what to change, then regenerates
-- Save to library (saves the edited values, not the original output)
+- **Draw Image** (per slide/scene/single): generates an AI reference image via `/api/generate-sketch`
+  - Uses `buildSketchPrompt()` to prepend full brand/product/content context to every request
+  - Once generated, a **Revision Notes** textarea appears above **Redraw** button for guided refinement
+  - Slide sketches saved into `slides[n].sketch_url`; scene sketches into `scenes[n].sketch_url`; single into `raw_response.sketchUrl`
+- Save to library (saves edited values + sketch URLs bundled into `raw_response`)
 
 **URL query params** (pre-fill from Topics page):
 `topic`, `format`, `pillar`, `platform`, `brandId`, `productId`, `objective`
@@ -598,10 +604,17 @@ Browse and manage all generated content.
 - Filter by status (all / approved / draft / rejected)
 - Filter by platform
 - Content card shows: title, platform badge, brand, product, status, created date
-- Social post preview mockup
+- Click row → opens platform mockup modal:
+  - **Instagram (Carousel):** horizontal scroll-snap slider with per-slide sketch image + `1/N` counter badge + ◀▶ nav arrows
+  - **Instagram (Reel/Video):** `InstagramReelsMockup` — storyboard carousel with IG header, per-scene `16:9` image + script text + visual direction
+  - **Twitter/X (Carousel):** horizontal scroll-snap slider showing per-slide sketches
+  - **TikTok / YouTube:** `VideoSceneCarousel` — per-scene `16:9` image panel (with scene badge + counter) + script text + visual direction in italic; ◀▶ nav arrows
+  - **Other platforms:** generic mockup
 - Copy-to-clipboard for caption and copy
 - Inline status change (approve / reject / reset to draft)
-- View carousel slides or video scenes inline
+- View carousel slides or video scenes inline in `ContentPanel`
+
+**Image rendering in mockups:** Reads `raw_response.sketchUrl` (single image), `slides[n].sketch_url` (carousel), or `scenes[n].sketch_url` (video). Falls back to a grey placeholder if no image exists.
 
 **DB reads/writes:** `generation_outputs`, `generation_requests`, `brands`, `products`
 
@@ -811,6 +824,42 @@ Fetch any URL and extract structured content for use as generation reference mat
 **AI model:** `claude-haiku-4-5-20251001`  
 **Max tokens:** 600  
 **Usage:** `contextString` is stored in UI state and passed as `referenceSummary` to `/api/generate` and `/api/generate-topics`. Claude is instructed to derive at least half of topics/content from this reference.
+
+---
+
+### `POST /api/generate-sketch`
+Generate an AI reference image for a content slide, scene, or single post and return it as a Base64 Data URI (bypasses Supabase Storage entirely, avoiding RLS issues).
+
+**File:** `src/app/api/generate-sketch/route.ts`
+
+**Input:**
+```ts
+{ prompt: string }  // The slide/scene visual direction + copy, prefixed with brand/content context
+```
+
+**Process:**
+1. Validate prompt is present
+2. Prepend `"professional advertising photography, high resolution, sharp focus, commercial grade, cinematic composition, studio quality lighting, ultra-detailed"` as quality boosters (after the user prompt — does not override it)
+3. Generate a random seed for variation
+4. Fetch image from `image.pollinations.ai` at `768×768`, `model=flux`
+5. Server-side proxy download → convert to Base64 string
+6. Return as `data:image/jpeg;base64,...` URI (never touches Supabase Storage)
+
+**Output:**
+```ts
+{
+  success: boolean,
+  sketchUrl: string   // Base64 data URI — can be used directly in <img src="..."/>
+}
+```
+
+**Prompt enrichment (client side):** Before calling this API, `generate/page.tsx` calls `buildSketchPrompt(rawPrompt)` which prepends:
+```
+[Context: Brand: {name}, Product: {productName}, Content: {contentTitle}, Platform: {platform}] {rawPrompt}
+```
+This ensures subject consistency across all images in a carousel or storyboard.
+
+**No AI model** — uses `image.pollinations.ai` (free, no API key required).
 
 ---
 
