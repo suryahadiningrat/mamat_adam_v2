@@ -40,7 +40,7 @@ FCE juga mendukung pembuatan draf visual (*production briefs*) menggunakan **KIE
 ---
 
 ## Core Rules (Non-Negotiable)
-1. All data access must enforce Workspace RLS.
+1. All data access must enforce Workspace Security at the **Application Layer** (No Supabase RLS).
 2. AI prompts must include the relevant Brand Brain and Product Brain context.
 3. Content generation uses Claude Sonnet 4 with Prompt Caching (Brand/Product info cached).
 4. Scraping uses Jina Reader (`r.jina.ai`) to bypass bot blocks and extract clean markdown.

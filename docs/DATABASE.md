@@ -2,7 +2,11 @@
 
 ## Overview
 
-All core tables use workspace-scoped Row Level Security (RLS). Users can only access data belonging to workspaces where they have an active role in \`user_workspace_roles\`.
+All core tables reside in a local PostgreSQL database (accessed via Prisma, Drizzle, or raw `pg` client).
+
+> **MIGRATION NOTE (No Supabase):** 
+> Karena kita berpindah dari Supabase ke Local PostgreSQL mentah, **Row Level Security (RLS)** bawaan Supabase yang menggunakan `auth.uid()` tidak lagi berfungsi secara *native*.
+> Isolasi data (Tenant Isolation) kini harus diimplementasikan pada **Level Aplikasi (Application-Level Security)**. Artinya, di setiap rute API atau Server Action, kita harus memvalidasi *session/token* pengguna, mencari `workspace_id` yang ia miliki di `user_workspace_roles`, dan secara manual menambahkan klausa `WHERE workspace_id IN (...)` di setiap kueri database.
 
 | Table | Purpose |
 |-------|---------|
@@ -26,18 +30,28 @@ All core tables use workspace-scoped Row Level Security (RLS). Users can only ac
 
 ---
 
-## Key RLS Policy Pattern
+## Key Tenant Isolation Pattern (Application Layer)
 
-All workspace-scoped tables enforce isolation using this pattern:
+Karena tidak ada Supabase RLS, setiap operasi *read/write* di ORM (misal Prisma) **harus** difilter:
 
-\`\`\`sql
-CREATE POLICY "tenant isolation" ON table_name
-FOR ALL USING (
-  workspace_id IN (
-    SELECT workspace_id FROM user_workspace_roles WHERE user_id = auth.uid()
-  )
-);
-\`\`\`
+```typescript
+// Contoh implementasi di Next.js (Prisma)
+const session = await auth() // Ambil dari NextAuth
+if (!session) throw new Error("Unauthorized")
+
+// Selalu cari berdasarkan workspace yang user berhak akses
+const userWorkspaces = await prisma.userWorkspaceRole.findMany({
+  where: { userId: session.user.id },
+  select: { workspaceId: true }
+})
+const allowedWorkspaceIds = userWorkspaces.map(role => role.workspaceId)
+
+const brands = await prisma.brand.findMany({
+  where: {
+    workspaceId: { in: allowedWorkspaceIds }
+  }
+})
+```
 
 ## Core Schema Details
 
@@ -59,12 +73,12 @@ Versioned tables track changes to AI context:
 
 ---
 
-## Supabase Storage
+## Local Storage Bucket (Replaces Supabase Storage)
 
-| Bucket | Access | Purpose |
-|--------|--------|---------|
-| \`product_images\` | Public read, Auth write | Product thumbnails and workspace logos |
+Karena tidak menggunakan Supabase Storage, kita menggunakan Local File System (di bawah direktori `public/uploads`) atau Object Storage terpisah seperti **MinIO** atau S3 untuk menyimpan:
+- `product_images`: Thumbnail produk dan logo workspace
+- `assets`: Konten media dari AI (video/gambar)
 
-## Custom RPC Functions
+## Custom Database Functions (Stored Procedures)
 
-- \`increment_api_usage(p_workspace_id uuid, p_amount numeric)\`: Safely increments the workspace API usage cost after each successful Claude API call.
+Fungsi `increment_api_usage` yang dulunya ada di Supabase RPC (Remote Procedure Call) kini bisa diimplementasikan sebagai transaksi Prisma (`prisma.$executeRaw`) atau via kueri *pg* native di rute API.

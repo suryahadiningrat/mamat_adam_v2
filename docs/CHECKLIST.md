@@ -3,6 +3,15 @@
 > Track development progress and feature completion. 
 > Referensi ini digunakan oleh AI Agent untuk memahami fitur secara detail sebelum menambahkan sub-fitur.
 
+## Phase 0.5 — Migrasi Infrastruktur: Dari Supabase ke Local PostgreSQL 🚧 URGENT
+**Tujuan:** Mengganti semua dependensi BaaS (Backend-as-a-Service) Supabase menjadi solusi self-hosted yang mengandalkan server PostgreSQL lokal, Auth mandiri, dan Storage lokal.
+- [ ] **Database ORM Setup:** Instal dan konfigurasi ORM seperti `Prisma` atau `Drizzle ORM` untuk menghubungkan aplikasi Next.js dengan server PostgreSQL (`localhost:5432`).
+- [ ] **Migrasi Schema DB:** Terjemahkan file `supabase-schema.sql` (beserta fungsi RPC) menjadi skema ORM (contoh: `schema.prisma`) dan jalankan migrasinya (`prisma db push`).
+- [ ] **Auth Replacement (NextAuth/Auth.js):** Ganti Supabase Auth dengan NextAuth.js. Buat *provider* Credentials (Email/Password) dan pastikan mekanisme enkripsi *password* menggunakan `bcrypt`.
+- [ ] **Application-Level Security (RLS Removal):** Karena PostgreSQL lokal tidak memiliki fungsi `auth.uid()` seperti Supabase, semua fitur keamanan RLS (Row Level Security) harus diganti. Tambahkan validasi *workspace* (`WHERE workspace_id IN (...)`) secara manual di *setiap* route API atau Server Action berdasarkan session NextAuth pengguna.
+- [ ] **Storage Replacement:** Buat endpoint API (`/api/upload`) untuk menangani pengunggahan file (gambar produk, draf visual) yang menyimpannya secara fisik di folder lokal (misal: `/public/uploads`) atau gunakan *Local S3-compatible server* seperti **MinIO**.
+- [ ] **Refactor API Routes:** Hapus semua *import* `import { supabase } from '@/lib/supabase'` di seluruh aplikasi (`src/app/api/...` dan komponen UI) dan ganti dengan *queries* menggunakan ORM.
+
 ---
 
 ## Phase 1 — Foundation & Auth
@@ -97,10 +106,10 @@
 **Tujuan:** Mendukung draf visual menggunakan AI gambar (*KIE.ai* atau serupa).
 - [ ] Buat API Endpoint untuk men-*trigger* `task_id` pembuatan gambar secara asinkron.
 - [ ] Buat API/Cron/Client-polling untuk mengecek status `task_id`.
-- [ ] Sediakan UI State: "Generating...", *skeleton loader*, hingga gambar diunduh dan dipindah ke Supabase Storage.
+- [ ] Sediakan UI State: "Generating...", *skeleton loader*, hingga gambar diunduh dan dipindah ke Local Storage (misal: `/public/uploads` atau MinIO).
 
 ## Phase 11 — Feedback Loop & Advanced Grounding 🚧 BACKLOG
 **Tujuan:** Mewujudkan *Continuous Improvement Loop* dan penarikan konteks lanjutan (Phase 2 PRD).
 - [ ] Buat UI untuk memberi *rating* atau *reason tags* pada setiap *output* (tersimpan di `output_feedback_events`).
-- [ ] Implementasi ekstensi `pgvector` di PostgreSQL/Supabase.
+- [ ] Implementasi ekstensi `pgvector` di server PostgreSQL lokal.
 - [ ] Refaktor mesin *generation* untuk mengambil *chunks* referensi dokumen secara dinamis menggunakan *vector similarity search* ketika *Brand IQ* terlalu besar.

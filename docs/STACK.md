@@ -7,9 +7,9 @@
 | Framework | Next.js 14 (App Router) + TypeScript | |
 | Styling | Tailwind CSS + CSS custom properties (globals.css) | |
 | Icons | Lucide React | |
-| Database | Supabase (PostgreSQL) | |
-| Storage | Supabase Storage | `product_images` bucket |
-| Auth | Supabase Auth | email + password |
+| Database | Local PostgreSQL (port 5432) | via ORM (e.g., Prisma or Drizzle) |
+| Storage | Local File System / MinIO | Replaces Supabase Storage (`product_images`) |
+| Auth | NextAuth.js (Auth.js) / Custom JWT | Replaces Supabase Auth |
 | AI — Text | Anthropic Claude API / Local Gemma | Claude 3.5 Sonnet & Haiku / Local Gemma via Ollama |
 | AI — Image | KIE.ai (Planned) | Async generation via `task_id` polling |
 | AI — Vector | pgvector (Planned) | For semantic search in Brand IQ Phase 2 |
@@ -23,9 +23,12 @@
 ```env
 # .env.local
 
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+# Database
+DATABASE_URL="postgresql://suryahadiningrat:@localhost:5432/fce_db?schema=public"
+
+# Auth (NextAuth.js)
+NEXTAUTH_SECRET="your-super-secret-jwt-key"
+NEXTAUTH_URL="http://localhost:3000"
 
 # Anthropic (server-side only, never expose to client)
 ANTHROPIC_API_KEY=
@@ -69,11 +72,12 @@ LOCAL_AI_MODEL_NAME=gemma2:9b
 │   │   └── layout.tsx            # Root layout
 │   ├── contexts/
 │   │   └── WorkspaceContext.tsx  # Workspace state management
-│   └── lib/
-│       ├── supabase.ts           # Supabase client config
-│       └── skills/               # Marketing AI skills (copywriting, etc.)
+    └── lib/
+        ├── db.ts                 # Local Postgres client (e.g., Prisma Client)
+        ├── auth.ts               # NextAuth / Session configuration
+        └── skills/               # Marketing AI skills (copywriting, etc.)
 ├── docs/                         # This folder
-└── supabase-schema.sql           # Full DB schema
+└── schema.sql                    # Initial DB schema (Postgres native)
 ```
 
 ---
