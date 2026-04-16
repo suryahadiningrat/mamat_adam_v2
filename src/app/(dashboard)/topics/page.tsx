@@ -82,6 +82,7 @@ export default function TopicsPage() {
     brandId: '',
     productMode: 'general' as 'general' | 'mixed' | 'specific',
     selectedProductIds: [] as string[],
+    selectedPillars: [] as string[],
     platform: 'Instagram',
     objective: '',
     count: 10,
@@ -159,6 +160,7 @@ export default function TopicsPage() {
           count: form.count,
           dateFrom: form.dateFrom,
           dateTo: form.dateTo,
+          selectedPillars: form.selectedPillars.length > 0 ? form.selectedPillars : undefined,
           context: form.context || undefined,
           referenceUrl: form.referenceUrl || undefined,
           referenceSummary: referenceSummary || undefined,
@@ -319,7 +321,7 @@ export default function TopicsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Brand *</label>
                 <div style={{ position: 'relative' }}>
-                  <select value={form.brandId} onChange={e => { set('brandId')(e.target.value); set('selectedProductIds')([]) }}
+                  <select value={form.brandId} onChange={e => { set('brandId')(e.target.value); set('selectedProductIds')([]); set('selectedPillars')([]) }}
                     style={{ width: '100%', appearance: 'none', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: form.brandId ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: 'var(--font-body)', cursor: 'pointer', outline: 'none' }}
                     onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'}>
                     <option value="">Select a brand</option>
@@ -370,12 +372,49 @@ export default function TopicsPage() {
                 </div>
               )}
 
-              {/* Pillar preview */}
+              {/* Pillar selection */}
               {ext.content_pillars.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {ext.content_pillars.map((p: string) => (
-                    <span key={p} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: `${pillarColor(p)}18`, border: `1px solid ${pillarColor(p)}40`, color: pillarColor(p) }}>{p}</span>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                      Content Pillars
+                    </label>
+                    {form.selectedPillars.length > 0 && (
+                      <button onClick={() => set('selectedPillars')([])} style={{ fontSize: 10.5, color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', textDecoration: 'underline' }}>
+                        All pillars
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {ext.content_pillars.map((p: string) => {
+                      const color = pillarColor(p)
+                      const active = form.selectedPillars.length === 0 || form.selectedPillars.includes(p)
+                      const selected = form.selectedPillars.includes(p)
+                      return (
+                        <button key={p} onClick={() => {
+                          const next = selected
+                            ? form.selectedPillars.filter(x => x !== p)
+                            : [...form.selectedPillars, p]
+                          set('selectedPillars')(next)
+                        }} style={{
+                          fontSize: 11, padding: '3px 9px', borderRadius: 20, cursor: 'pointer',
+                          fontFamily: 'var(--font-body)', fontWeight: selected ? 600 : 400,
+                          border: `1px solid ${selected ? color : 'var(--border)'}`,
+                          background: selected ? `${color}20` : active ? `${color}08` : 'var(--surface-3)',
+                          color: active ? color : 'var(--text-tertiary)',
+                          opacity: active ? 1 : 0.45,
+                          transition: 'all 0.15s',
+                        }}>
+                          {p}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
+                    {form.selectedPillars.length === 0
+                      ? 'All pillars will be used — click to restrict'
+                      : `Generating topics for: ${form.selectedPillars.join(', ')}`}
+                  </p>
                 </div>
               )}
             </div>
@@ -556,15 +595,26 @@ export default function TopicsPage() {
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                {topics.map((topic, idx) => (
-                  <TopicCard
-                    key={idx} topic={topic} onDelete={() => handleDelete(idx)}
-                    onUpdate={updates => handleUpdateTopic(idx, updates)}
-                    onRegenerate={ctx => handleRegenerateOne(idx, ctx)}
-                    brandId={form.brandId}
-                    platform={form.platform} objective={form.objective}
-                  />
-                ))}
+                {topics.map((topic, idx) => {
+                  // When exactly one product is in scope and the AI doesn't embed product_id
+                  // (API only adds product_id to schema when products.length > 1), pass it as fallback
+                  const defaultProductId =
+                    form.productMode === 'specific' && form.selectedProductIds.length === 1
+                      ? form.selectedProductIds[0]
+                      : form.productMode === 'mixed' && availableProducts.length === 1
+                      ? availableProducts[0].id
+                      : ''
+                  return (
+                    <TopicCard
+                      key={idx} topic={topic} onDelete={() => handleDelete(idx)}
+                      onUpdate={updates => handleUpdateTopic(idx, updates)}
+                      onRegenerate={ctx => handleRegenerateOne(idx, ctx)}
+                      brandId={form.brandId}
+                      platform={form.platform} objective={form.objective}
+                      defaultProductId={defaultProductId}
+                    />
+                  )
+                })}
               </div>
             </>
           ) : (
@@ -591,11 +641,12 @@ export default function TopicsPage() {
 
 const availableFormats = Object.keys(formatColors)
 
-function TopicCard({ topic, onDelete, onUpdate, onRegenerate, brandId, platform, objective }: {
+function TopicCard({ topic, onDelete, onUpdate, onRegenerate, brandId, platform, objective, defaultProductId }: {
   topic: Topic; onDelete: () => void
   onUpdate: (updates: Partial<Topic>) => void
   onRegenerate: (context: string) => Promise<void>
   brandId: string; platform: string; objective: string
+  defaultProductId?: string
 }) {
   const [regenOpen, setRegenOpen] = useState(false)
   const [regenContext, setRegenContext] = useState('')
@@ -604,11 +655,14 @@ function TopicCard({ topic, onDelete, onUpdate, onRegenerate, brandId, platform,
   const fmtColor = formatColors[topic.content_format] || '#7c6dfa'
   const pColor = pillarColor(topic.content_pillar || '')
 
+  // Use topic's own product_id if present; fall back to the contextual default
+  const resolvedProductId = topic.product_id || defaultProductId || ''
+
   const generateUrl = `/generate?` + new URLSearchParams({
     topic: topic.content_title, format: topic.content_format || '',
     pillar: topic.content_pillar || '', platform, brandId,
     ...(objective ? { objective } : {}),
-    ...(topic.product_id ? { productId: topic.product_id } : {})
+    ...(resolvedProductId ? { productId: resolvedProductId } : {})
   }).toString()
 
   async function handleRegen() {
@@ -705,12 +759,19 @@ function TopicCard({ topic, onDelete, onUpdate, onRegenerate, brandId, platform,
 
       {/* Actions */}
       {topic.saved ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#10b981' }}>
-          <CheckCircle2 size={12} /> Saved to calendar
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#10b981' }}>
+            <CheckCircle2 size={12} /> Saved
+          </div>
+          <a href={generateUrl} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-accent)', background: 'rgba(124,109,250,0.06)' }}>
+            Generate Content <ArrowRight size={11} />
+          </a>
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <a href={generateUrl} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
+          <a href={generateUrl} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
             Generate <ArrowRight size={11} />
           </a>
           <button onClick={() => setRegenOpen(o => !o)} style={{

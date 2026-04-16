@@ -44,6 +44,7 @@ export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
+  const [brandFilter, setBrandFilter] = useState<string>('all')
   const [items, setItems] = useState<OutputRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [mockupItem, setMockupItem] = useState<OutputRecord | null>(null)
@@ -80,14 +81,18 @@ export default function LibraryPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const brandOptions = Array.from(new Set(items.map(i => i.request?.brand?.name).filter(Boolean))) as string[]
+
   const filtered = items.filter(item => {
     const brandName = item.request?.brand?.name || ''
-    const matchSearch = item.copy_on_visual?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = (item.content_title?.toLowerCase().includes(search.toLowerCase())) ||
+                        item.copy_on_visual?.toLowerCase().includes(search.toLowerCase()) ||
                         item.caption?.toLowerCase().includes(search.toLowerCase()) ||
                         brandName.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || item.status === statusFilter
     const matchPlatform = platformFilter === 'all' || item.request?.platform === platformFilter
-    return matchSearch && matchStatus && matchPlatform
+    const matchBrand = brandFilter === 'all' || brandName === brandFilter
+    return matchSearch && matchStatus && matchPlatform && matchBrand
   })
 
   const timeAgo = (dateStr: string) => {
@@ -538,6 +543,15 @@ export default function LibraryPage() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search content, hooks, brands…"
             style={{ width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px 8px 34px', fontSize: 13.5, color: 'var(--text-primary)', outline: 'none' }} />
         </div>
+        {brandOptions.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}>
+              <option value="all">All Brands</option>
+              {brandOptions.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+          </div>
+        )}
         <div style={{ position: 'relative' }}>
           <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ appearance: 'none', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}>
             <option value="all">All Platforms</option>

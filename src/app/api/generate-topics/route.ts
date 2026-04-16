@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       count = 10,
       dateFrom,
       dateTo,
+      selectedPillars,
       context,
       referenceUrl,
       referenceSummary,
@@ -32,6 +33,10 @@ export async function POST(req: NextRequest) {
       Array.isArray(v) && v.length ? v.join(', ') : null
 
     const pillars = fmtArr(brand.contentPillars)
+    // If the user selected specific pillars, restrict to those; otherwise use all brand pillars
+    const activePillars: string[] = (selectedPillars && selectedPillars.length > 0)
+      ? selectedPillars
+      : (brand.contentPillars || [])
     const platforms = fmtArr(brand.socialPlatforms)
 
     const contentFormats = platform?.toLowerCase().includes('tiktok')
@@ -84,7 +89,11 @@ Generate exactly ${count} content topic ideas for ${platform || 'social media'}.
 ${dateContext}
 
 For each topic, choose the most appropriate content format from: ${contentFormats.join(', ')}.
-${pillars ? `Assign each topic to one of the brand's content pillars: ${pillars}. Distribute topics evenly across pillars.` : 'Assign a relevant content pillar to each topic.'}
+${activePillars.length > 0
+  ? activePillars.length === 1
+    ? `ALL ${count} topics MUST be assigned to this content pillar: "${activePillars[0]}". Do not use any other pillar.`
+    : `ONLY use these content pillars (distribute evenly): ${activePillars.map((p: string) => `"${p}"`).join(', ')}. Do not invent or use any other pillar.`
+  : 'Assign a relevant content pillar to each topic.'}
 
 Rules:
 - Titles must be specific, actionable, and scroll-stopping (not generic)

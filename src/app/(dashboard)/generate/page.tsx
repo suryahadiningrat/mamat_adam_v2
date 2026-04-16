@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Zap, ChevronDown, Sparkles, Copy, RefreshCw,
   CheckCircle2, Hash, Image, MessageSquare, ArrowRight,
@@ -8,6 +8,13 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+
+function pillarColor(pillar: string): string {
+  const colors = ['#7c6dfa', '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#06b6d4']
+  let hash = 0
+  for (let i = 0; i < pillar.length; i++) hash = pillar.charCodeAt(i) + ((hash << 5) - hash)
+  return colors[Math.abs(hash) % colors.length]
+}
 
 // ─── Platform → Available Formats ────────────────────────────────────────────
 const platformFormats: Record<string, { label: string; icon: string; isVideo: boolean; isCarousel: boolean }[]> = {
@@ -84,7 +91,15 @@ function parseExt(raw: any) {
 
 type DBProduct = {
   id: string; brand_id: string; name: string;
-  product_brain_versions: { usp: string; functional_benefits: any }[]
+  product_brain_versions: {
+    usp: string
+    rtb: string
+    functional_benefits: any
+    emotional_benefits: any
+    key_claims: any
+    target_audience: string
+    mandatory_disclaimers: string
+  }[]
 }
 
 type Slide = { slide_number: number; copy_on_visual: string; visual_direction: string; sketch_url?: string }
@@ -212,9 +227,11 @@ export default function GeneratePage() {
   const [scrapeResult, setScrapeResult] = useState<{ title: string; content_type: string; main_topic: string; key_claims: string[]; tone: string; summary: string; content_angles: string[] } | null>(null)
   const [referenceSummary, setReferenceSummary] = useState('')
   const [usage, setUsage] = useState<null | Record<string, number>>(null)
+  const urlParamsApplied = useRef(false)
 
   const [form, setForm] = useState({
     brandId: '', productId: '', platform: '', outputFormat: '',
+    contentPillar: '',
     objective: '', framework: '', hookType: '', tone: '', visualStyle: '',
     outputLength: '', additionalContext: '', referenceUrl: ''
   })
@@ -231,18 +248,20 @@ export default function GeneratePage() {
       if (!user) return
       setUserId(user.id)
 
-      const { data: bData } = await supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, brand_values, brand_promise, source_summary, audience_persona, messaging_rules)').eq('workspace_id', workspaceId)
+      const [{ data: bData }, { data: pData }] = await Promise.all([
+        supabase.from('brands').select('id, name, brand_brain_versions(tone_of_voice, brand_personality, brand_values, brand_promise, source_summary, audience_persona, messaging_rules)').eq('workspace_id', workspaceId),
+        supabase.from('products').select('id, brand_id, name, product_brain_versions(usp, rtb, functional_benefits, emotional_benefits, key_claims, target_audience, mandatory_disclaimers)').eq('workspace_id', workspaceId)
+      ])
       if (bData) setBrands(bData as DBBrand[])
-
-      const { data: pData } = await supabase.from('products').select('id, brand_id, name, product_brain_versions(usp, functional_benefits)').eq('workspace_id', workspaceId)
       if (pData) setProducts(pData as DBProduct[])
     }
     initData()
   }, [workspaceId])
 
   // Apply URL params (from Topic Generator / Topic Library) after data loads
+  // Wait for both brands AND products so selectedProduct resolves correctly on first render
   useEffect(() => {
-    if (!brands.length) return
+    if (!brands.length || urlParamsApplied.current) return
     const params = new URLSearchParams(window.location.search)
     const topicParam     = params.get('topic')
     const formatParam    = params.get('format')
@@ -269,11 +288,14 @@ export default function GeneratePage() {
       ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
       ...(resolvedFormat ? { outputFormat: resolvedFormat } : {}),
       ...(objectiveParam ? { objective: objectiveParam } : {}),
+      ...(pillarParam ? { contentPillar: pillarParam } : {}),
       additionalContext: topicParam
         ? `Topic reference: "${topicParam}"${pillarParam ? ` — Pillar: ${pillarParam}` : ''}. Generate content specifically for this topic.`
         : f.additionalContext
     }))
-  }, [brands])
+    urlParamsApplied.current = true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brands, products])
 
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -332,7 +354,9 @@ export default function GeneratePage() {
         toneOfVoice: toneVoice,
         personality: brain?.brand_personality || '',
         brandPromise: brain?.brand_promise || '',
-        audience: brain?.audience_persona || '',
+        audience: typeof brain?.audience_persona === 'object' && brain?.audience_persona !== null
+          ? JSON.stringify(brain.audience_persona)
+          : (brain?.audience_persona || ''),
         brandValues: brain?.brand_values || [],
         uniqueSellingPoints: ext.unique_selling_points,
         contentPillars: ext.content_pillars,
@@ -344,16 +368,18 @@ export default function GeneratePage() {
         vocabularyBlacklist: [],
         vocabularyWhitelist: []
       }
+      const pBrain = selectedProduct?.product_brain_versions?.[0]
       const promptProductPayload = isGeneralMode
         ? null
         : {
             name: selectedProduct!.name,
-            usp: selectedProduct!.product_brain_versions?.[0]?.usp || '',
-            rtb: '',
-            keyClaims: [],
-            mandatoryDisclaimers: '',
-            targetAudience: selectedProduct!.product_brain_versions?.[0]?.functional_benefits || '',
-            emotionalBenefits: ''
+            usp: pBrain?.usp || '',
+            rtb: pBrain?.rtb || '',
+            keyClaims: Array.isArray(pBrain?.key_claims) ? pBrain.key_claims : (pBrain?.key_claims ? [pBrain.key_claims] : []),
+            mandatoryDisclaimers: pBrain?.mandatory_disclaimers || '',
+            targetAudience: pBrain?.target_audience || '',
+            emotionalBenefits: Array.isArray(pBrain?.emotional_benefits) ? pBrain.emotional_benefits.join('; ') : (pBrain?.emotional_benefits || ''),
+            functionalBenefits: Array.isArray(pBrain?.functional_benefits) ? pBrain.functional_benefits.join('; ') : (pBrain?.functional_benefits || ''),
           }
 
       const res = await fetch('/api/generate', {
@@ -364,6 +390,7 @@ export default function GeneratePage() {
           product: promptProductPayload,
           platform: form.platform,
           outputFormat: form.outputFormat,
+          contentPillar: form.contentPillar || undefined,
           objective: form.objective,
           framework: form.framework || 'PAS',
           hookType: form.hookType || 'Curiosity',
@@ -605,7 +632,7 @@ export default function GeneratePage() {
             <div className="panel-header"><span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Brain size={14} style={{ color: 'var(--text-secondary)' }} /> Context</span></div>
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Select label="Brand" options={brands.map(b => b.name)} value={selectedBrand?.name || ''}
-                onChange={v => { set('brandId')(brands.find(b => b.name === v)?.id || ''); set('productId')('') }} placeholder="Select a brand" />
+                onChange={v => { set('brandId')(brands.find(b => b.name === v)?.id || ''); set('productId')(''); set('contentPillar')('') }} placeholder="Select a brand" />
               {form.brandId ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.3px' }}>Product</label>
@@ -637,6 +664,48 @@ export default function GeneratePage() {
                   </div>
                 </div>
               )}
+
+              {/* Content Pillar picker — shown once brand is selected */}
+              {selectedBrand && (() => {
+                const ext = parseExt(selectedBrand.brand_brain_versions?.[0]?.messaging_rules)
+                return ext.content_pillars.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.3px' }}>
+                        Content Pillar
+                      </label>
+                      {form.contentPillar && (
+                        <button onClick={() => set('contentPillar')('')} style={{ fontSize: 10.5, color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', textDecoration: 'underline' }}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {ext.content_pillars.map((p: string) => {
+                        const color = pillarColor(p)
+                        const selected = form.contentPillar === p
+                        return (
+                          <button key={p} onClick={() => set('contentPillar')(selected ? '' : p)} style={{
+                            fontSize: 11, padding: '3px 9px', borderRadius: 20, cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontWeight: selected ? 600 : 400,
+                            border: `1px solid ${selected ? color : 'var(--border)'}`,
+                            background: selected ? `${color}20` : 'var(--surface-3)',
+                            color: selected ? color : 'var(--text-tertiary)',
+                            transition: 'all 0.15s',
+                          }}>
+                            {p}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {form.contentPillar && (
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                        Content will be generated specifically for the <strong style={{ color: pillarColor(form.contentPillar) }}>{form.contentPillar}</strong> pillar.
+                      </p>
+                    )}
+                  </div>
+                ) : null
+              })()}
             </div>
           </div>
 
