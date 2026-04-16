@@ -11,6 +11,32 @@ export async function POST(req: Request) {
 
     const body = await req.json()
     
+    let calId = body.calendar_id
+
+    if (calId) {
+      await prisma.calendarItem.update({
+        where: { id: calId },
+        data: {
+          title: body.content_title || 'Generated Post',
+          status: 'draft',
+          updated_at: new Date()
+        }
+      })
+    } else if (body.publish_date) {
+      const calItem = await prisma.calendarItem.create({
+        data: {
+          workspace_id: body.workspace_id,
+          title: body.content_title || 'Generated Post',
+          date: new Date(body.publish_date),
+          channel: body.platform,
+          format: body.output_format,
+          status: 'draft',
+          created_by: userId
+        }
+      })
+      calId = calItem.id
+    }
+
     const request = await prisma.generationRequest.create({
       data: {
         workspace_id: body.workspace_id,
@@ -29,6 +55,8 @@ export async function POST(req: Request) {
         generationOutputs: {
           create: {
             workspace_id: body.workspace_id,
+            topic_id: body.topic_id || null,
+            calendar_id: calId || null,
             content_title: body.content_title,
             copy_on_visual: body.copy_on_visual,
             caption: body.caption,

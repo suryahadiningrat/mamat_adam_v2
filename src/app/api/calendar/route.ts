@@ -17,18 +17,54 @@ export async function GET(req: Request) {
 
     if (!workspaceId) return new NextResponse('Workspace ID required', { status: 400 })
 
-    const items = await prisma.calendarItem.findMany({
-      where: { 
-        workspace_id: workspaceId,
-        date: {
-          gte: startDate ? new Date(startDate) : undefined,
-          lte: endDate ? new Date(endDate) : undefined,
-        }
-      },
-      orderBy: { date: 'asc' }
+    const [items, topics] = await Promise.all([
+      prisma.calendarItem.findMany({
+        where: { 
+          workspace_id: workspaceId,
+          date: {
+            gte: startDate ? new Date(startDate) : undefined,
+            lte: endDate ? new Date(endDate) : undefined,
+          }
+        },
+        orderBy: { date: 'asc' }
+      }),
+      prisma.contentTopic.findMany({
+        where: {
+          workspace_id: workspaceId,
+          publish_date: {
+            gte: startDate ? new Date(startDate) : undefined,
+            lte: endDate ? new Date(endDate) : undefined,
+          }
+        },
+        orderBy: { publish_date: 'asc' }
+      })
+    ])
+
+    // Map topics to look like calendar items so they appear on the calendar
+    const mappedTopics = topics.map((t: any) => ({
+      id: `topic-${t.id}`, // prefix to avoid collision
+      workspace_id: t.workspace_id,
+      campaign_id: null,
+      title: `[Topic] ${t.content_title}`,
+      date: t.publish_date,
+      channel: t.platform || 'Unknown',
+      format: t.content_format || 'Unknown',
+      status: t.status,
+      owner_id: t.created_by,
+      created_by: t.created_by,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      is_topic: true,
+      original_topic_id: t.id
+    }))
+
+    const combined = [...items, ...mappedTopics].sort((a, b) => {
+      const dateA = new Date(a.date!).getTime()
+      const dateB = new Date(b.date!).getTime()
+      return dateA - dateB
     })
 
-    return NextResponse.json(items)
+    return NextResponse.json(combined)
   } catch (error) {
     console.error(error)
     return new NextResponse('Internal Error', { status: 500 })

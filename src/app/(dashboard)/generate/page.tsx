@@ -4,7 +4,7 @@ import {
   Zap, ChevronDown, Sparkles, Copy, RefreshCw,
   CheckCircle2, Hash, Image, MessageSquare, ArrowRight,
   ToggleLeft, ToggleRight, Info, Brain, Package, Save,
-  Plus, Trash2, Film, Layers, Monitor, type LucideIcon
+  Plus, Trash2, Film, Layers, Monitor, Link as LinkIcon, type LucideIcon
 } from 'lucide-react'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { useSession } from 'next-auth/react'
@@ -206,7 +206,7 @@ export default function GeneratePage() {
   const [form, setForm] = useState({
     brandId: '', productId: '', platform: '', outputFormat: '',
     objective: '', framework: '', hookType: '', tone: '', visualStyle: '',
-    outputLength: '', additionalContext: '', referenceUrl: ''
+    outputLength: '', additionalContext: '', referenceUrl: '', date: ''
   })
 
   const { workspaceId } = useWorkspace()
@@ -255,8 +255,87 @@ export default function GeneratePage() {
     const brandIdParam   = params.get('brandId')
     const productIdParam = params.get('productId')
     const objectiveParam = params.get('objective')
+    const calendarIdParam = params.get('calendarId')
+    const topicIdParam = params.get('topicId')
 
-    if (!topicParam && !brandIdParam) return
+    if (!topicParam && !brandIdParam && !calendarIdParam && !topicIdParam) return
+
+    if (topicIdParam) {
+      fetch(`/api/topics/${topicIdParam}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.id) {
+            setTopicRef({ title: data.content_title, pillar: data.content_pillar || '', format: data.content_format || '' })
+            setForm(f => ({
+              ...f,
+              brandId: data.brand_id || f.brandId,
+              productId: data.product_id || f.productId,
+              platform: data.platform || f.platform,
+              outputFormat: data.content_format && data.platform ? matchFormat(data.content_format, data.platform) : f.outputFormat,
+              date: data.publish_date ? new Date(data.publish_date).toISOString().split('T')[0] : f.date,
+              additionalContext: `Topic reference: "${data.content_title}"${data.content_pillar ? ` — Pillar: ${data.content_pillar}` : ''}. Generate content specifically for this topic.`
+            }))
+          }
+        })
+        .catch(err => console.error('Failed to fetch topic', err))
+    }
+
+    if (calendarIdParam) {
+      fetch(`/api/calendar/${calendarIdParam}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.id) {
+            setForm(f => ({
+              ...f,
+              platform: data.channel || f.platform,
+              outputFormat: data.format || f.outputFormat,
+              date: data.date ? new Date(data.date).toISOString().split('T')[0] : f.date,
+              additionalContext: `Calendar post reference: "${data.title}". Generate content for this calendar item.`
+            }))
+          }
+        })
+        .catch(err => console.error('Failed to fetch calendar item', err))
+    }
+
+    if (calendarIdParam || topicIdParam) {
+      const qs = []
+      if (calendarIdParam) qs.push(`calendarId=${calendarIdParam}`)
+      if (topicIdParam) qs.push(`topicId=${topicIdParam}`)
+
+      fetch(`/api/generations/latest?${qs.join('&')}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.id) {
+            setOutput(data)
+            setEditableTitle(data.content_title || '')
+            setEditableSlides(data.slides || [])
+            setEditableScenes(data.scenes || [])
+            setEditCopyOnVisual(data.copy_on_visual || '')
+            setEditCaption(data.caption || '')
+            setEditCtaOptions(data.cta_options || [])
+            setEditHashtags((data.hashtag_pack || []).join(' '))
+            setEditVisualDirection(data.visual_direction || '')
+            setEditRationale(data.rationale || '')
+            setLibrarySaved(data.status === 'approved')
+
+            setForm(f => ({
+              ...f,
+              brandId: data.request?.brand_id || f.brandId,
+              productId: data.request?.product_id || f.productId,
+              platform: data.request?.platform || f.platform,
+              outputFormat: data.request?.output_format || f.outputFormat,
+              objective: data.request?.objective || f.objective,
+              framework: data.request?.framework_id || f.framework,
+              hookType: data.request?.hook_type_id || f.hookType,
+              tone: data.request?.tone_override || f.tone,
+              visualStyle: data.request?.visual_style || f.visualStyle,
+              outputLength: data.request?.output_length || f.outputLength,
+              additionalContext: data.request?.additional_context || f.additionalContext
+            }))
+          }
+        })
+        .catch(err => console.error('Failed to fetch existing generation', err))
+    }
 
     const resolvedBrand = brandIdParam ? brands.find(b => b.id === brandIdParam) : undefined
     const resolvedPlatform = platformParam || ''
@@ -428,7 +507,9 @@ export default function GeneratePage() {
         hashtag_pack: hashtagPack,
         visual_direction: editVisualDirection || null,
         rationale: editRationale || null,
-        raw_response: output
+        raw_response: output,
+        publish_date: form.date ? new Date(form.date).toISOString() : null,
+        calendar_id: new URLSearchParams(window.location.search).get('calendarId') || null
       }
 
       const res = await fetch('/api/generations', {
@@ -598,6 +679,45 @@ export default function GeneratePage() {
               )}
 
               <Select label="Objective" options={objectives} value={form.objective} onChange={set('objective')} />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Publish Date <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(optional)</span></label>
+                <input type="date" value={form.date} onChange={e => set('date')(e.target.value)}
+                  style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: form.date ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: 'var(--font-body)', outline: 'none', transition: 'border-color 0.15s' }}
+                  onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              </div>
+            </div>
+          </div>
+
+          {/* Reference & Context */}
+          <div className="panel fade-up fade-up-4">
+            <div className="panel-header">
+              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <LinkIcon size={14} style={{ color: 'var(--text-secondary)' }} /> Reference & Context <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(optional)</span>
+              </span>
+            </div>
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input type="url" value={form.referenceUrl} onChange={e => set('referenceUrl')(e.target.value)}
+                    placeholder="https://…"
+                    style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', transition: 'border-color 0.15s' }}
+                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                  <button className="btn btn-secondary" style={{ padding: '0 12px' }} disabled={!form.referenceUrl}>
+                    <Sparkles size={14} /> Analyze
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Additional Context</label>
+                <textarea value={form.additionalContext} onChange={e => set('additionalContext')(e.target.value)} rows={3} placeholder="E.g. Focus on the launch campaign, mention the free trial offer..." style={{
+                  background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', transition: 'border-color 0.15s', lineHeight: 1.5
+                }} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              </div>
             </div>
           </div>
 
@@ -611,21 +731,6 @@ export default function GeneratePage() {
                 <Select label="Tone Variation" options={toneVariations} value={form.tone} onChange={set('tone')} />
                 <Select label="Visual Style" options={visualStyles} value={form.visualStyle} onChange={set('visualStyle')} />
                 <Select label="Output Length" options={outputLengths} value={form.outputLength} onChange={set('outputLength')} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Additional Context</label>
-                  <textarea value={form.additionalContext} onChange={e => set('additionalContext')(e.target.value)} rows={3} style={{
-                    background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)',
-                    fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', transition: 'border-color 0.15s', lineHeight: 1.5
-                  }} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(optional)</span></label>
-                  <input type="url" value={form.referenceUrl} onChange={e => set('referenceUrl')(e.target.value)}
-                    placeholder="https://…"
-                    style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', transition: 'border-color 0.15s' }}
-                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-                    onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-                </div>
               </div>
             </div>
           )}

@@ -13,6 +13,8 @@ export interface CalendarItem {
   created_by?: string | null
   created_at: string | Date
   updated_at: string | Date
+  is_topic?: boolean
+  original_topic_id?: string
 }
 
 export async function fetchCalendarItems(workspaceId: string, startDate: string, endDate: string) {

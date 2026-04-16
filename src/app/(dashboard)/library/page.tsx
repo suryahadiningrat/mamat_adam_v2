@@ -57,6 +57,19 @@ export default function LibraryPage() {
       
       const data = await res.json()
       setItems(data)
+
+      // Auto open modal if coming from calendar
+      const params = new URLSearchParams(window.location.search)
+      const calId = params.get('calendarId')
+      const topId = params.get('topicId')
+      if (calId || topId) {
+        const target = data.find((i: any) => i.calendar_id === calId || i.topic_id === topId)
+        if (target) {
+          setMockupItem(target)
+          // Clean up URL without reload
+          window.history.replaceState({}, '', '/library')
+        }
+      }
     } catch (err) {
       console.error(err)
     }

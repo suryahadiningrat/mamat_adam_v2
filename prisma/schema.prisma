@@ -288,6 +288,8 @@ model GenerationOutput {
   id               String    @id @default(uuid())
   request_id       String
   workspace_id     String
+  topic_id         String?
+  calendar_id      String?
   content_title    String?
   copy_on_visual   String?
   caption          String?

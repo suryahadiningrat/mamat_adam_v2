@@ -33,7 +33,7 @@ ${socialContentSkill}
 </social_content_skill>
 ===================================
 
-Output format: ONLY valid JSON, no markdown, no explanation outside the JSON.`
+Output format: ONLY valid JSON, no markdown, no explanation outside the JSON. IMPORTANT: You must properly escape all double quotes inside string values (use \\").`
 
 // ─── Dynamic Output Schemas ──────────────────────────────────────────────────
 
@@ -171,7 +171,7 @@ ${product ? `PRODUCT BRAIN:
 ${additionalContext ? `- Additional Context: ${additionalContext}` : ''}
 ${referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
 
-Return ONLY this JSON structure:
+Return ONLY this JSON structure. DO NOT wrap the output in markdown code blocks. Make sure all internal double quotes are escaped like \\" :
 ${schema}`
 
     const aiResult = await generateAIContent({

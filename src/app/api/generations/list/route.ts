@@ -12,15 +12,16 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get('workspaceId')
-    if (!workspaceId) return new NextResponse('Workspace ID required', { status: 400 })
+    
+    if (!workspaceId) return new NextResponse('Missing workspaceId', { status: 400 })
 
     const outputs = await prisma.generationOutput.findMany({
       where: { workspace_id: workspaceId },
       include: {
         request: {
           include: {
-            brand: { select: { name: true } },
-            product: { select: { name: true } }
+            brand: true,
+            product: true
           }
         }
       },

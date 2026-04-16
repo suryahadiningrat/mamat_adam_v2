@@ -59,7 +59,7 @@ function pillarColor(pillar: string): string {
 
 function fmtDate(d: string | null) {
   if (!d) return null
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function TopicLibraryPage() {

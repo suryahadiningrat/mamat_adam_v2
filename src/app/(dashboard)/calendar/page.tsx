@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { CalendarItem, CalendarItemStatus, fetchCalendarItems, createCalendarItem, updateCalendarItem } from '@/lib/services/calendar'
-import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, AlignLeft } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, AlignLeft, Eye } from 'lucide-react'
 
 // Simple helper functions for dates
 const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate()
@@ -18,12 +18,29 @@ export default function CalendarPage() {
   // Drawer states
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<Partial<CalendarItem> | null>(null)
+  const [hasGeneratedContent, setHasGeneratedContent] = useState(false)
 
   useEffect(() => {
     if (workspaceId) {
       loadMonthData(currentDate.getFullYear(), currentDate.getMonth())
     }
   }, [workspaceId, currentDate])
+
+  useEffect(() => {
+    if (drawerOpen && selectedItem && (selectedItem.id || selectedItem.is_topic)) {
+      // Check if it has generated content
+      const id = selectedItem.is_topic ? selectedItem.original_topic_id : selectedItem.id
+      const qs = selectedItem.is_topic ? `topicId=${id}` : `calendarId=${id}`
+      fetch(`/api/generations/latest?${qs}`)
+        .then(r => r.json())
+        .then(data => {
+          setHasGeneratedContent(!!(data && data.id))
+        })
+        .catch(() => setHasGeneratedContent(false))
+    } else {
+      setHasGeneratedContent(false)
+    }
+  }, [drawerOpen, selectedItem])
 
   const loadMonthData = async (year: number, month: number) => {
     if (!workspaceId) return
@@ -71,6 +88,11 @@ export default function CalendarPage() {
   const handleSaveItem = async () => {
     if (!workspaceId || !selectedItem?.title || !selectedItem?.date) return
     
+    if (selectedItem.is_topic) {
+      alert("Editing topics directly from the calendar is not supported yet.")
+      return
+    }
+
     try {
       if (selectedItem.id) {
         await updateCalendarItem(selectedItem.id, selectedItem)
@@ -174,7 +196,7 @@ export default function CalendarPage() {
                     <div 
                       key={item.id} 
                       onClick={(e) => handleItemClick(e, item)}
-                      className={`text-xs p-1.5 rounded border ${getStatusColor(item.status)} truncate cursor-pointer hover:opacity-80 transition-opacity`}
+                      className={`text-xs p-1.5 rounded border ${getStatusColor(item.status)} ${item.is_topic ? 'border-dashed opacity-80' : ''} truncate cursor-pointer hover:opacity-100 transition-opacity`}
                       title={item.title}
                     >
                       <span className="font-medium mr-1">{item.channel}</span>
@@ -195,7 +217,7 @@ export default function CalendarPage() {
           <div className="fixed top-0 right-0 h-full w-[450px] bg-gray-900 border-l border-gray-800 z-50 shadow-2xl flex flex-col animate-in slide-in-from-right">
             <div className="flex items-center justify-between p-6 border-b border-gray-800">
               <h2 className="text-xl font-bold text-white">
-                {selectedItem.id ? 'Edit Post' : 'New Post'}
+                {selectedItem.is_topic ? 'View Topic' : selectedItem.id ? 'Edit Post' : 'New Post'}
               </h2>
               <button onClick={() => setDrawerOpen(false)} className="text-gray-400 hover:text-white">
                 <X size={24} />
@@ -276,24 +298,62 @@ export default function CalendarPage() {
               </div>
               
               <div className="pt-6 border-t border-gray-800">
-                <button className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-medium transition-colors border border-gray-700">
-                  <AlignLeft size={18} />
-                  Open in AI Generator
-                </button>
+                {hasGeneratedContent ? (
+                  <button 
+                    onClick={() => {
+                      // Navigate to library or generator depending on desired UX.
+                      // Since user asked to go to library view, let's navigate to library and filter by this item
+                      if (selectedItem.is_topic) {
+                        window.location.href = `/library?topicId=${selectedItem.original_topic_id}`
+                      } else {
+                        window.location.href = `/library?calendarId=${selectedItem.id}`
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors border border-blue-500"
+                  >
+                    <Eye size={18} />
+                    View Generated Content
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      if (selectedItem.is_topic) {
+                        window.location.href = `/generate?topicId=${selectedItem.original_topic_id}`
+                      } else if (selectedItem.id) {
+                        window.location.href = `/generate?calendarId=${selectedItem.id}`
+                      } else {
+                        alert('Please save the calendar item first before opening in AI Generator')
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-medium transition-colors border border-gray-700"
+                  >
+                    <AlignLeft size={18} />
+                    Open in AI Generator
+                  </button>
+                )}
                 <p className="text-center text-xs text-gray-500 mt-3">
-                  This will take you to the content pipeline to draft this post.
+                  This will take you to the content pipeline to {hasGeneratedContent ? 'view/edit' : 'draft'} this post.
                 </p>
               </div>
             </div>
             
             <div className="p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur">
-              <button 
-                onClick={handleSaveItem}
-                disabled={!selectedItem.title}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-bold transition-colors"
-              >
-                Save Calendar Item
-              </button>
+              {selectedItem.is_topic ? (
+                <button 
+                  onClick={() => window.location.href = `/generate?topicId=${selectedItem.original_topic_id}`}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                >
+                  Generate Content
+                </button>
+              ) : (
+                <button 
+                  onClick={handleSaveItem}
+                  disabled={!selectedItem.title}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                >
+                  Save Calendar Item
+                </button>
+              )}
             </div>
           </div>
         </>
