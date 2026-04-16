@@ -2,7 +2,7 @@
 
 > This file is auto-loaded by Claude Code at the start of every session.
 > Any AI assistant should read this file first before touching any code.
-> Last updated: 2026-04-14
+> Last updated: 2026-04-16
 
 ---
 
@@ -147,6 +147,8 @@ ANTHROPIC_API_KEY=          ← server-side only, never in client code
 - Never amend existing commits — always create new ones
 - Don't add features beyond what's asked — this codebase is production-bound
 - The `messaging_rules` JSONB column stores extended brand fields (website, industry, content_pillars, dos, donts, content_language, social_media_platforms, marketing_strategy, unique_selling_points) — don't create new columns for these
+- **Language param**: `brand.contentLanguage` in the payload is a reference field only. The actual output language instruction is the top-level `language` param. Always pass `language: ext.content_language || 'Indonesian'` explicitly in the fetch body when calling `/api/generate` or `/api/generate-topics`
+- **`content_topics.content_title` is VARCHAR(255)**: always truncate AI-generated titles with `.substring(0, 255)` before inserting to avoid DB errors
 
 ---
 
