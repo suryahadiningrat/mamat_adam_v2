@@ -164,6 +164,7 @@ export default function TopicsPage() {
           context: form.context || undefined,
           referenceUrl: form.referenceUrl || undefined,
           referenceSummary: referenceSummary || undefined,
+          language: ext.content_language || 'Indonesian',
           workspace_id: workspaceId,
         })
       })
@@ -189,7 +190,7 @@ export default function TopicsPage() {
         workspace_id: workspaceId,
         brand_id: form.brandId,
         product_id: form.productMode === 'general' ? null : (t.product_id || null),
-        content_title: t.content_title,
+        content_title: t.content_title.substring(0, 255),
         content_pillar: t.content_pillar,
         content_format: t.content_format,
         platform: form.platform,
@@ -246,6 +247,7 @@ export default function TopicsPage() {
           count: 1, dateFrom: topics[idx]?.publish_date || form.dateFrom,
           dateTo: form.dateTo, context: revisionContext,
           referenceSummary: referenceSummary || undefined,
+          language: ext.content_language || 'Indonesian',
           workspace_id: workspaceId,
         })
       })

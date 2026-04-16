@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
-import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud, Sparkles } from 'lucide-react'
+import { Brain, Plus, Trash2, X, Save, AlertCircle, Package, ImageIcon, UploadCloud, Sparkles, Search } from 'lucide-react'
 
 type Brand = {
   id: string
@@ -36,6 +36,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [brandFilter, setBrandFilter] = useState('all')
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -294,6 +296,19 @@ export default function ProductsPage() {
     setProducts(products.filter(p => p.id !== id))
   }
 
+  const q = search.toLowerCase().trim()
+  const filteredProducts = products.filter(p => {
+    const matchBrand = brandFilter === 'all' || p.brand_id === brandFilter
+    const matchSearch = !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.product_type || '').toLowerCase().includes(q) ||
+      (p.summary || '').toLowerCase().includes(q) ||
+      (p.brain?.usp || '').toLowerCase().includes(q)
+    return matchBrand && matchSearch
+  })
+
+  const visibleBrands = brands.filter(b => filteredProducts.some(p => p.brand_id === b.id))
+
   return (
     <div>
       <div className="page-header page-header-row fade-up fade-up-1">
@@ -306,7 +321,35 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <div className="fade-up fade-up-2" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {/* Search + Filter bar */}
+      <div className="fade-up fade-up-2" style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+          <input
+            className="form-input"
+            style={{ paddingLeft: 36, height: 38 }}
+            placeholder="Search products…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="form-input"
+          style={{ height: 38, flex: '0 0 auto', minWidth: 160 }}
+          value={brandFilter}
+          onChange={e => setBrandFilter(e.target.value)}
+        >
+          <option value="all">All Brands</option>
+          {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        {(search || brandFilter !== 'all') && (
+          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+            {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      <div className="fade-up fade-up-3" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         {loading ? (
           <div style={{ padding: 20, color: 'var(--text-tertiary)' }}>Loading products...</div>
         ) : products.length === 0 ? (
@@ -323,9 +366,14 @@ export default function ProductsPage() {
               Add Product
             </button>
           </div>
+        ) : filteredProducts.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', background: 'var(--surface-2)', borderRadius: 12, border: '1px dashed var(--border)' }}>
+            <Search size={28} style={{ color: 'var(--text-tertiary)', margin: '0 auto 12px' }} />
+            <p style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No products match your search.</p>
+          </div>
         ) : (
-          brands.filter(b => products.some(p => p.brand_id === b.id)).map(brand => {
-            const brandProducts = products.filter(p => p.brand_id === brand.id)
+          visibleBrands.map(brand => {
+            const brandProducts = filteredProducts.filter(p => p.brand_id === brand.id)
             return (
               <div key={brand.id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
@@ -335,7 +383,7 @@ export default function ProductsPage() {
                   <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{brand.name}</h2>
                   <span style={{ background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>{brandProducts.length}</span>
                 </div>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
                   {brandProducts.map(product => (
                     <div key={product.id} className="panel" style={{ cursor: 'pointer', transition: 'all 0.2s', position: 'relative', padding: 24, display: 'flex', flexDirection: 'column' }}

@@ -97,6 +97,7 @@ ${activePillars.length > 0
 
 Rules:
 - Titles must be specific, actionable, and scroll-stopping (not generic)
+- Keep content_title under 100 characters — no long sentences
 - Mix different formats — don't repeat the same format more than 3 times in a row
 - Make titles feel native to ${platform || 'social media'} (${language} market context)
 - Each title should clearly communicate what the post is about
