@@ -12,8 +12,10 @@ export async function POST(req: NextRequest) {
       count = 10,
       dateFrom,
       dateTo,
+      selectedPillars,
       context,
       referenceUrl,
+      referenceSummary,
       workspace_id,
       language = 'Indonesian'
     } = body
@@ -26,6 +28,10 @@ export async function POST(req: NextRequest) {
       Array.isArray(v) && v.length ? v.join(', ') : null
 
     const pillars = fmtArr(brand.contentPillars)
+    // If the user selected specific pillars, restrict to those; otherwise use all brand pillars
+    const activePillars: string[] = (selectedPillars && selectedPillars.length > 0)
+      ? selectedPillars
+      : (brand.contentPillars || [])
     const platforms = fmtArr(brand.socialPlatforms)
 
     const contentFormats = platform?.toLowerCase().includes('tiktok')
@@ -42,11 +48,16 @@ export async function POST(req: NextRequest) {
         : `Distribute topics across these products (assign one product_id per topic):\n${products.map((p: { id: string; name: string; usp: string }) => `- id: "${p.id}", name: "${p.name}", usp: "${p.usp || 'Not specified'}"`).join('\n')}`
       : `No specific product — generate brand-level or educational/awareness topics.`
 
-    const extraContext = context
-      ? `\nADDITIONAL DIRECTION:\n${context}${referenceUrl ? `\nReference URL: ${referenceUrl}` : ''}`
-      : referenceUrl
-      ? `\nReference URL for inspiration: ${referenceUrl}`
-      : ''
+    const hasReference = !!(referenceSummary || referenceUrl)
+
+    const extraContext = [
+      referenceSummary
+        ? referenceSummary
+        : referenceUrl
+        ? `REFERENCE URL: ${referenceUrl}`
+        : null,
+      context ? `ADDITIONAL DIRECTION FROM USER:\n${context}` : null,
+    ].filter(Boolean).join('\n\n')
 
     const dateContext = dateFrom && dateTo
       ? `Spread publish dates between ${dateFrom} and ${dateTo}.`
@@ -67,13 +78,17 @@ BRAND CONTEXT:
 ${brand.brandSummary ? `- Brand Summary: ${brand.brandSummary}` : ''}
 
 ${productContext}
-${extraContext}
+${extraContext ? `${extraContext}\n` : ''}
 TASK:
 Generate exactly ${count} content topic ideas for ${platform || 'social media'}.
 ${dateContext}
 
 For each topic, choose the most appropriate content format from: ${contentFormats.join(', ')}.
-${pillars ? `Assign each topic to one of the brand's content pillars: ${pillars}. Distribute topics evenly across pillars.` : 'Assign a relevant content pillar to each topic.'}
+${activePillars.length > 0
+  ? activePillars.length === 1
+    ? `ALL ${count} topics MUST be assigned to this content pillar: "${activePillars[0]}". Do not use any other pillar.`
+    : `ONLY use these content pillars (distribute evenly): ${activePillars.map((p: string) => `"${p}"`).join(', ')}. Do not invent or use any other pillar.`
+  : 'Assign a relevant content pillar to each topic.'}
 
 Rules:
 - Titles must be specific, actionable, and scroll-stopping (not generic)
@@ -81,6 +96,7 @@ Rules:
 - Make titles feel native to ${platform || 'social media'} (${language} market context)
 - Each title should clearly communicate what the post is about
 - Vary the angle: educational, product feature, lifestyle, testimonial/proof, behind-the-scenes, trend-based
+${hasReference ? `- IMPORTANT: Use the reference material above as direct inspiration. Derive topic angles, claims, and themes from it — do not ignore it. At least half the topics should clearly reflect the reference content.` : ''}
 
 === EXPERT MARKETING GUIDELINES ===
 Follow the principles in these guidelines when conceptualizing the topic angles:

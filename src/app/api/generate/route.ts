@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
       product,
       platform,
       outputFormat,
+      contentPillar,
       objective,
       framework,
       hookType,
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
       outputLength,
       additionalContext,
       referenceUrl,
+      referenceSummary,
       language = 'Indonesian',
       workspace_id
     } = body
@@ -149,11 +151,12 @@ ${fmtList(brand.donts)}
 ${product ? `PRODUCT BRAIN:
 - Product: ${product.name} (${product.type || 'General'})
 - USP: ${product.usp || 'Not specified'}
-- RTB: ${product.rtb || 'Not specified'}
+- RTB (Reason to Believe): ${product.rtb || 'Not specified'}
 - Key Claims: ${product.keyClaims?.join('; ') || 'Not specified'}
 - Target Audience: ${product.targetAudience || 'Same as brand'}
-- Mandatory Disclaimers: ${product.mandatoryDisclaimers || 'None'}
-- Emotional Benefits: ${product.emotionalBenefits || 'Not specified'}` : `PRODUCT BRAIN: Not applicable — this is brand-level content. Focus on brand values, pillars, and overall brand story rather than a specific product.`}`.trim()
+- Functional Benefits: ${product.functionalBenefits || 'Not specified'}
+- Emotional Benefits: ${product.emotionalBenefits || 'Not specified'}
+- Mandatory Disclaimers: ${product.mandatoryDisclaimers || 'None'}` : `PRODUCT BRAIN: Not applicable — this is brand-level content. Focus on brand values, pillars, and overall brand story rather than a specific product.`}`.trim()
 
     const schema = getOutputSchema(outputFormat || 'single image')
 
@@ -161,6 +164,7 @@ ${product ? `PRODUCT BRAIN:
     const userPrompt = `Generate content with these parameters:
 - Platform: ${platform}
 - Output Format: ${outputFormat || 'Single Image'}
+${contentPillar ? `- Content Pillar: ${contentPillar} — THIS IS MANDATORY. Every element of this content (topic angle, copy, caption, hashtags) must align with and stay within this content pillar. Do not drift into other pillars.` : ''}
 - Objective: ${objective}
 - Framework: ${framework}
 - Hook Type: ${hookType}
@@ -169,7 +173,7 @@ ${product ? `PRODUCT BRAIN:
 - Output Length: ${outputLength || 'Medium'}
 - Language: ${language}
 ${additionalContext ? `- Additional Context: ${additionalContext}` : ''}
-${referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
+${referenceSummary ? `\n${referenceSummary}` : referenceUrl ? `- Reference URL: ${referenceUrl}` : ''}
 
 Return ONLY this JSON structure. DO NOT wrap the output in markdown code blocks. Make sure all internal double quotes are escaped like \\" :
 ${schema}`

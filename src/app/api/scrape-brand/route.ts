@@ -1,6 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateAIContent } from '@/lib/ai'
 
+// Strip HTML to readable plain text (fallback when Jina returns insufficient content)
+function stripHtml(html: string): string {
+  // Remove script, style, nav, footer, header, aside blocks entirely
+  let text = html.replace(/<(script|style|nav|footer|header|aside|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '')
+  // Replace block-level closing tags with newline
+  text = text.replace(/<\/(p|div|li|h[1-6]|section|article|main|br)>/gi, '\n')
+  // Strip all remaining tags
+  text = text.replace(/<[^>]+>/g, '')
+  // Decode common HTML entities
+  text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+  // Collapse whitespace
+  text = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  return text
+}
+
+async function fetchWithFallback(u: string): Promise<string> {
+  const normalizedUrl = u.startsWith('http') ? u : `https://${u}`
+
+  // Try Jina Reader first
+  try {
+    const jinaUrl = `https://r.jina.ai/${normalizedUrl}`
+    const res = await fetch(jinaUrl, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'X-Return-Format': 'markdown' }
+    })
+    if (res.ok) {
+      const text = await res.text()
+      if (text.trim().length > 200) {
+        return `=== Source: ${u} ===\n${text.slice(0, 8000)}`
+      }
+    }
+  } catch {
+    // Jina failed — fall through to direct fetch
+  }
+
+  // Fallback: direct fetch + HTML stripping
+  try {
+    const res = await fetch(normalizedUrl, {
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FCE-Bot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      }
+    })
+    if (!res.ok) return `[Failed to fetch ${u} - HTTP ${res.status}]`
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.includes('text/html')) return `[Non-HTML content at ${u}]`
+    const html = await res.text()
+    const plain = stripHtml(html).slice(0, 8000)
+    if (plain.length < 100) return `[Insufficient content at ${u}]`
+    return `=== Source: ${u} ===\n${plain}`
+  } catch (err: any) {
+    return `[Error fetching ${u}: ${err.message}]`
+  }
+}
+
 const EXTRACTION_PROMPT = `You are a brand analyst. Based on the extracted website and social media content below, extract structured brand information.
 
 Return ONLY a valid JSON object with these exact fields (use empty string "" or empty array [] if not found):
@@ -34,44 +90,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 })
     }
 
-    console.log('aa');
-
-    // Fetch all URLs in parallel using Jina Reader to bypass bot blocks and get clean Markdown
-    const fetchPromises = urlsToScrape.slice(0, 5).map(async (u: string) => {
-      const normalizedUrl = u.startsWith('http') ? u : `https://${u}`
-      const jinaUrl = `https://r.jina.ai/${normalizedUrl}`
-      
-      try {
-        const res = await fetch(jinaUrl, {
-          signal: AbortSignal.timeout(15000),
-          headers: { 
-            'X-Return-Format': 'markdown',
-            'Accept': 'application/json' 
-          }
-        })
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '')
-          console.error(`Jina Error ${res.status}:`, errText)
-          return `[Failed to fetch ${u} - HTTP ${res.status}]`
-        }
-        
-        let text = await res.text()
-        
-        // Parse Jina JSON response if it's JSON
-        try {
-          const jinaJson = JSON.parse(text)
-          if (jinaJson.data && jinaJson.data.content) {
-            text = jinaJson.data.content
-          }
-        } catch (e) {
-          // If not JSON, assume it's raw markdown
-        }
-        
-        return `=== Source: ${u} ===\n${text.slice(0, 8000)}`
-      } catch (fetchErr: any) {
-        return `[Error fetching ${u}: ${fetchErr.message}]`
-      }
-    })
+    // Fetch all URLs in parallel — tries Jina Reader first, falls back to direct fetch + HTML strip
+    const fetchPromises = urlsToScrape.slice(0, 5).map((u: string) => fetchWithFallback(u))
 
     const results = await Promise.all(fetchPromises)
     let combinedText = results.join('\n\n')
