@@ -103,9 +103,9 @@
 
 ## Phase 10 — Image Generation (Async) 🚧 BACKLOG
 **Tujuan:** Mendukung draf visual menggunakan AI gambar (*KIE.ai* atau serupa).
-- [ ] Buat API Endpoint untuk men-*trigger* `task_id` pembuatan gambar secara asinkron.
-- [ ] Buat API/Cron/Client-polling untuk mengecek status `task_id`.
-- [ ] Sediakan UI State: "Generating...", *skeleton loader*, hingga gambar diunduh dan dipindah ke Local Storage (misal: `/public/uploads` atau MinIO).
+- [x] Buat API Endpoint untuk men-*trigger* `task_id` pembuatan gambar secara asinkron.
+- [x] Buat API/Cron/Client-polling untuk mengecek status `task_id`.
+- [x] Sediakan UI State: "Generating...", *skeleton loader*, hingga gambar diunduh dan dipindah ke Local Storage (misal: `/public/uploads` atau MinIO).
 
 ## Phase 11 — Feedback Loop & Advanced Grounding 🚧 BACKLOG
 **Tujuan:** Mewujudkan *Continuous Improvement Loop* dan penarikan konteks lanjutan (Phase 2 PRD).

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -131,7 +132,8 @@ export async function POST(req: NextRequest) {
     const promptRes = await fetch(`${COMFYUI_URL}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: workflow })
+      body: JSON.stringify({ prompt: workflow }),
+      cache: 'no-store'
     })
 
     if (!promptRes.ok) {
@@ -142,41 +144,15 @@ export async function POST(req: NextRequest) {
 
     const { prompt_id } = await promptRes.json()
 
-    // 2. Poll for completion
-    let attempts = 0
-    let filename = ''
-    while (attempts < 60) { // Max 60 attempts * 2s = 120s timeout
-      await new Promise(r => setTimeout(r, 2000))
-      const historyRes = await fetch(`${COMFYUI_URL}/history/${prompt_id}`)
-      const historyJson = await historyRes.json()
-
-      if (historyJson[prompt_id]) {
-        // Find the SaveImage node output (node 9)
-        const outputs = historyJson[prompt_id].outputs
-        if (outputs && outputs["9"] && outputs["9"].images && outputs["9"].images.length > 0) {
-          filename = outputs["9"].images[0].filename
-          break
-        }
+    // 2. Save task to DB and return immediately (Async mode)
+    const task = await prisma.imageGenerationTask.create({
+      data: {
+        prompt_id: prompt_id,
+        status: 'pending',
       }
-      attempts++
-    }
+    })
 
-    if (!filename) {
-      return NextResponse.json({ error: 'Image generation timed out' }, { status: 504 })
-    }
-
-    // 3. Fetch the actual image file
-    const imageRes = await fetch(`${COMFYUI_URL}/view?filename=${filename}&type=output`)
-    if (!imageRes.ok) {
-      return NextResponse.json({ error: 'Failed to download generated image from ComfyUI' }, { status: 500 })
-    }
-
-    // Convert to base64 Data URI
-    const arrayBuffer = await imageRes.arrayBuffer()
-    const base64 = Buffer.from(arrayBuffer).toString('base64')
-    const dataUri = `data:image/png;base64,${base64}`
-    
-    return NextResponse.json({ success: true, sketchUrl: dataUri })
+    return NextResponse.json({ success: true, taskId: task.id })
 
   } catch (error: any) {
     console.error('Sketch generation error:', error)

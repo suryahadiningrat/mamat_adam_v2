@@ -660,15 +660,32 @@ export default function GeneratePage() {
       });
       const data = await res.json();
       
-      if (data.success && data.sketchUrl) {
-        if (type === 'single') {
-          setSketchUrl(data.sketchUrl);
-        } else if (type === 'slide' && idx !== undefined) {
-          setSlideSketches(s => ({ ...s, [idx]: data.sketchUrl }));
-          updateSlide(idx, 'sketch_url', data.sketchUrl);
-        } else if (type === 'scene' && idx !== undefined) {
-          setSceneSketches(s => ({ ...s, [idx]: data.sketchUrl }));
-          updateScene(idx, 'sketch_url', data.sketchUrl);
+      if (data.success && data.taskId) {
+        // Poll for task completion
+        const taskId = data.taskId;
+        let isComplete = false;
+        
+        while (!isComplete) {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3 seconds
+          
+          const statusRes = await fetch(`/api/generate-sketch/${taskId}`);
+          const statusData = await statusRes.json();
+          
+          if (statusData.status === 'completed' && statusData.sketchUrl) {
+            if (type === 'single') {
+              setSketchUrl(statusData.sketchUrl);
+            } else if (type === 'slide' && idx !== undefined) {
+              setSlideSketches(s => ({ ...s, [idx]: statusData.sketchUrl }));
+              updateSlide(idx, 'sketch_url', statusData.sketchUrl);
+            } else if (type === 'scene' && idx !== undefined) {
+              setSceneSketches(s => ({ ...s, [idx]: statusData.sketchUrl }));
+              updateScene(idx, 'sketch_url', statusData.sketchUrl);
+            }
+            isComplete = true;
+          } else if (statusData.status === 'failed') {
+            alert(statusData.error || 'Failed to generate sketch');
+            isComplete = true;
+          }
         }
       } else {
         alert(data.error || 'Failed to generate sketch');
