@@ -64,7 +64,20 @@ All 11 pages are functional and wired to Supabase + Claude:
 
 ### Pending / Next Up
 
-**High priority:**
+**🆕 NEW — Phase 12: Competitor Intelligence & Viral Formula Engine (NEXT BUILD)**
+Fitur baru berdasarkan arsitektur video analisis kompetitor. Pipeline: **Apify (scraping) → Gemini (video analysis) → Claude (brand-adapted concepts)**.
+- [ ] **Step 1 — DB Migration**: Buat dan jalankan `migrate_competitor_intelligence.sql`. 4 tabel baru: `competitor_accounts`, `competitor_videos`, `viral_analyses`, `viral_concepts`. Detail schema lengkap di `CHECKLIST.md` Phase 12A dan `DATABASE.md`.
+- [ ] **Step 2 — Env Vars**: Tambahkan `APIFY_API_KEY` dan `GEMINI_API_KEY` ke `.env.local` dan dokumentasikan di `STACK.md`.
+- [ ] **Step 3 — API Routes** (urutan implementasi):
+  1. `POST /api/competitor/add-account` — simpan akun kompetitor
+  2. `POST /api/competitor/scrape` — trigger Apify, polling `runId`, simpan ke `competitor_videos`
+  3. `POST /api/competitor/analyze` — kirim video URL ke Gemini multimodal, simpan ke `viral_analyses`
+  4. `POST /api/competitor/generate-concepts` — inject Brand Brain + analisis ke Claude Sonnet, simpan ke `viral_concepts`
+- [ ] **Step 4 — Brand Brain update**: Tambahkan field `production_constraints` di form `/brands` → simpan ke `messaging_rules.production_constraints`. **Ini harus ada sebelum generate-concepts dibuild**, agar Claude tidak generate ide yang mustahil diproduksi.
+- [ ] **Step 5 — UI `/competitor-intel`**: Halaman baru + tambah ke sidebar. Lihat detail komponen di `CHECKLIST.md` Phase 12C.
+- [ ] **Step 6 — Integrasi ke pipeline**: "Save to Topics" dari concept card → `content_topics`. "Generate Full Content" → pre-fill `/generate`.
+
+**High priority (dari sesi sebelumnya):**
 - [ ] **All-slides/all-scenes batch "Draw Image" button** — currently each slide/scene must be drawn individually. Add a single "Draw All Images" button that queues all in sequence.
 - [ ] **Sketch revision for single image** — the single-image (non-carousel) view doesn't yet have a revision textarea like slides/scenes do. Add parity.
 - [ ] **Library: Facebook Reels** — `renderMockup` doesn't have a Facebook-specific handler yet. Currently falls back to `GenericMockup`.

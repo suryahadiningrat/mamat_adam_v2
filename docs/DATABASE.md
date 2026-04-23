@@ -27,6 +27,10 @@ All core tables reside in a local PostgreSQL database (accessed via Prisma, Driz
 | `calendar_items` | *(Planned)* Visual calendar grid metadata and scheduling |
 | `drafts` | *(Planned)* Modular text blocks for per-block AI regeneration |
 | `assets` | *(Planned)* Media (image/video) tracking with metadata |
+| `competitor_accounts` | *(Phase 12)* Daftar akun kompetitor per workspace/brand |
+| `competitor_videos` | *(Phase 12)* Cache hasil scraping video viral kompetitor |
+| `viral_analyses` | *(Phase 12)* Hasil analisis Gemini: Hook, Retensi, CTA, formula tags |
+| `viral_concepts` | *(Phase 12)* Konsep konten baru hasil adaptasi formula ke brand |
 
 ---
 
@@ -82,3 +86,88 @@ Karena tidak menggunakan Supabase Storage, kita menggunakan Local File System (d
 ## Custom Database Functions (Stored Procedures)
 
 Fungsi `increment_api_usage` yang dulunya ada di Supabase RPC (Remote Procedure Call) kini bisa diimplementasikan sebagai transaksi Prisma (`prisma.$executeRaw`) atau via kueri *pg* native di rute API.
+
+---
+
+## Phase 12 Schema — Competitor Intelligence Tables
+
+Buat via file `migrate_competitor_intelligence.sql`. Jalankan dengan `prisma db execute` atau paste ke psql local.
+
+```sql
+-- Akun kompetitor yang dipantau per workspace/brand
+CREATE TABLE competitor_accounts (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  brand_id      UUID REFERENCES brands(id) ON DELETE SET NULL,
+  platform      VARCHAR(50) NOT NULL,         -- 'TikTok' | 'Instagram' | 'YouTube'
+  username      VARCHAR(255) NOT NULL,
+  profile_url   TEXT,
+  niche_tags    TEXT[],                        -- misal: ['otomotif','lifestyle','edukasi']
+  is_active     BOOLEAN DEFAULT true,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Cache video viral hasil scraping Apify
+CREATE TABLE competitor_videos (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  competitor_account_id UUID NOT NULL REFERENCES competitor_accounts(id) ON DELETE CASCADE,
+  video_url             TEXT NOT NULL,
+  video_id_platform     VARCHAR(255),          -- ID native dari platform (TikTok video ID, dll)
+  title                 TEXT,
+  views                 BIGINT DEFAULT 0,
+  likes                 BIGINT DEFAULT 0,
+  comments              BIGINT DEFAULT 0,
+  shares                BIGINT DEFAULT 0,
+  posted_at             TIMESTAMPTZ,
+  scraped_at            TIMESTAMPTZ DEFAULT NOW(),
+  raw_metadata          JSONB                  -- Raw response dari Apify (simpan semua field)
+);
+
+-- Hasil analisis Gemini: bedah anatomi video viral
+CREATE TABLE viral_analyses (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  competitor_video_id  UUID NOT NULL REFERENCES competitor_videos(id) ON DELETE CASCADE,
+  workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  hook_analysis        TEXT,                   -- Bagaimana 3 detik pertama menarik perhatian
+  retention_strategy   TEXT,                   -- Teknik mempertahankan penonton
+  cta_analysis         TEXT,                   -- Cara mengajak aksi di akhir
+  why_viral            TEXT,                   -- Summary mengapa video ini berhasil
+  comment_insights     TEXT,                   -- (Opsional) Sentimen komentar audiens
+  formula_tags         TEXT[],                 -- misal: ['curiosity-hook','transformation','list-format']
+  analyzed_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Konsep konten baru hasil adaptasi formula ke Brand
+CREATE TABLE viral_concepts (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  viral_analysis_id UUID NOT NULL REFERENCES viral_analyses(id) ON DELETE CASCADE,
+  brand_id          UUID REFERENCES brands(id) ON DELETE SET NULL,
+  product_id        UUID REFERENCES products(id) ON DELETE SET NULL,
+  platform          VARCHAR(50),
+  content_title     TEXT,
+  hook_adaptation   TEXT,                      -- Versi hook yang sudah diadaptasi ke brand
+  script_concept    TEXT,                      -- Outline skrip / konsep narasi
+  visual_direction  TEXT,                      -- Arahan visual / produksi
+  production_notes  TEXT,                      -- Catatan khusus sesuai production_constraints brand
+  status            VARCHAR(20) DEFAULT 'draft', -- 'draft' | 'saved' | 'used'
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index untuk performa query
+CREATE INDEX idx_competitor_accounts_workspace ON competitor_accounts(workspace_id);
+CREATE INDEX idx_competitor_videos_account ON competitor_videos(competitor_account_id);
+CREATE INDEX idx_viral_analyses_workspace ON viral_analyses(workspace_id);
+CREATE INDEX idx_viral_concepts_brand ON viral_concepts(brand_id);
+```
+
+### Tenant Isolation untuk Phase 12
+
+Semua query ke tabel-tabel ini **harus** difilter via `workspace_id` menggunakan pola yang sama seperti tabel lainnya (lihat bagian "Key Tenant Isolation Pattern" di atas).
+
+```typescript
+// Contoh: fetch competitor accounts untuk workspace aktif
+const accounts = await prisma.competitorAccount.findMany({
+  where: { workspaceId: { in: allowedWorkspaceIds } },
+  include: { competitorVideos: { orderBy: { views: 'desc' }, take: 10 } }
+})
+```
