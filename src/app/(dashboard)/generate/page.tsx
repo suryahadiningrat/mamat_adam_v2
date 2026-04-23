@@ -492,6 +492,7 @@ export default function GeneratePage() {
           additionalContext: contextOverride ?? form.additionalContext,
           referenceUrl: form.referenceUrl || undefined,
           referenceSummary: referenceSummary || undefined,
+          language: ext.content_language || 'Indonesian',
           workspace_id: workspaceId
         })
       })

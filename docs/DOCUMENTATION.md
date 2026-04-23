@@ -1,7 +1,7 @@
 # FCE Dashboard — Developer Documentation
 
 > **FCE (Floothink Content Engine)** — AI-powered social media content generation platform for brand marketing.  
-> Last updated: 2026-04-14
+> Last updated: 2026-04-16
 
 ---
 
@@ -455,7 +455,8 @@ The primary content creation workflow.
   - Tone override
   - Visual style
   - Output length (Short / Medium / Long)
-- Language toggle (defaults to Indonesian)
+- Language driven by brand's `content_language` field (passed explicitly to API as `language` param)
+- **Content Pillar picker**: single-select toggle shown when brand is selected; selected pillar is enforced as a hard constraint in the API prompt
 - Generate button → calls `/api/generate`
 - **All output fields are editable** before saving (copy on visual, caption, CTAs, hashtags, visual direction, rationale)
 - **Regenerate with context**: opens a revision textarea — user describes what to change, then regenerates
@@ -465,8 +466,9 @@ The primary content creation workflow.
   - Slide sketches saved into `slides[n].sketch_url`; scene sketches into `scenes[n].sketch_url`; single into `raw_response.sketchUrl`
 - Save to library (saves edited values + sketch URLs bundled into `raw_response`)
 
-**URL query params** (pre-fill from Topics page):
+**URL query params** (pre-fill from Topics page / Topic Library):
 `topic`, `format`, `pillar`, `platform`, `brandId`, `productId`, `objective`
+— `pillar` pre-fills the content pillar picker
 
 **DB writes:** `generation_requests`, `generation_outputs`
 
@@ -487,6 +489,8 @@ Bulk content calendar generation.
 - Set date range (from / to)
 - Set number of topics (1–30, slider, step 1)
 - Optional objective filter
+- **Content Pillar selection**: multi-select toggle showing all brand pillars; when pillars are selected the API is constrained to only those pillars; "All pillars" resets to unrestricted
+- Language driven by brand's `content_language` field (passed to API as `language` param)
 - **Reference & Context panel** (position 2, always visible):
   - Paste any URL → "Analyze" → `/api/scrape-url` extracts structured summary
   - Scraped `contextString` injected into generation prompt; at least half of topics should reflect the reference
@@ -494,8 +498,8 @@ Bulk content calendar generation.
 - Generate → calls `/api/generate-topics`
 - **Inline-editable topic cards**: title, pillar, format, date are all editable in the card
 - **Per-card regeneration**: each card has a Regenerate button → revision context textarea → regenerates just that one topic
-- Save all topics at once to `content_topics`
-- Quick-link each topic to `/generate` pre-filled
+- Save all topics at once to `content_topics` (title truncated to 255 chars as safety net)
+- Each topic card has "Generate Content →" link (opens in new tab) — visible both before and after saving
 
 **DB writes:** `content_topics`
 
@@ -507,12 +511,11 @@ Bulk content calendar generation.
 Manage saved topic calendar items.
 
 **Features:**
-- View all topics grouped by brand
-- Filter by platform and status
-- Summary stats: total topics, approved, generated
+- Flat table view: Topic Title, Brand, Pillar, Format, Platform, Date, Status, Actions
+- Search bar (matches title) + brand / platform / status filter dropdowns — all client-side
 - Inline status change via dropdown
 - Delete topics
-- Quick-navigate to generate from a topic
+- Generate Content link per row (opens in new tab, pre-fills Content Generator)
 
 **DB reads/writes:** `content_topics`, `brands`, `products`
 
@@ -578,7 +581,8 @@ Manage brand identities and their AI context.
 Manage products and their AI context.
 
 **Features:**
-- Products grouped by brand in a card grid
+- **Search bar + brand filter** at the top — live client-side filtering across name, product type, summary, and USP; result count shown when active; empty-state for no matches
+- Products grouped by brand in a card grid (brand headers update dynamically to match filtered results)
 - Each card shows: product image, name, type, summary, USP preview, price tier
 - Add / edit / delete via modal
 - AI auto-fill from URLs:
@@ -600,7 +604,8 @@ Manage products and their AI context.
 Browse and manage all generated content.
 
 **Features:**
-- Search by title or copy text
+- Search by title or copy text (also matches `content_title`)
+- Filter by brand (dropdown)
 - Filter by status (all / approved / draft / rejected)
 - Filter by platform
 - Content card shows: title, platform badge, brand, product, status, created date
@@ -702,16 +707,17 @@ Generate a single piece of social media content.
   },
   platform: string,
   outputFormat: string,
+  contentPillar: string,    // optional — if set, enforced as mandatory constraint in prompt
   objective: string,
-  framework: string,       // 'AIDA' | 'PAS' | 'BAB' | ''
+  framework: string,        // 'AIDA' | 'PAS' | 'BAB' | ''
   hookType: string,
   tone: string,
   visualStyle: string,
-  outputLength: string,    // 'short' | 'medium' | 'long'
+  outputLength: string,     // 'short' | 'medium' | 'long'
   additionalContext: string,
-  referenceUrl: string,       // raw URL (fallback)
-  referenceSummary: string,   // pre-formatted contextString from /api/scrape-url (preferred)
-  language: string,           // 'id' | 'en'
+  referenceUrl: string,     // raw URL (fallback)
+  referenceSummary: string, // pre-formatted contextString from /api/scrape-url (preferred)
+  language: string,         // brand's content_language — drives output language instruction
   workspace_id: string
 }
 ```
@@ -754,16 +760,17 @@ Generate bulk content topic calendar.
 ```ts
 {
   brand: { name, industry, toneOfVoice, personality, audience, brandSummary, contentPillars, socialPlatforms, marketingStrategy },
-  products: { id, name, usp }[],  // array — empty for General mode, full list for Mixed, subset for Specific
+  products: { id, name, usp }[],   // array — empty for General mode, full list for Mixed, subset for Specific
   platform: string,
-  count: number,           // 1–30
-  dateFrom: string,        // YYYY-MM-DD
-  dateTo: string,          // YYYY-MM-DD
-  workspace_id: string,
-  language: string,
-  context: string,         // user direction notes
-  referenceUrl: string,    // raw URL (fallback if no referenceSummary)
-  referenceSummary: string // pre-formatted contextString from /api/scrape-url (preferred)
+  count: number,                   // 1–30
+  dateFrom: string,                // YYYY-MM-DD
+  dateTo: string,                  // YYYY-MM-DD
+  selectedPillars: string[],       // optional — if set, API restricts generation to only these pillars
+  language: string,                // brand's content_language — drives "native to X market" instruction
+  context: string,                 // user direction notes
+  referenceUrl: string,            // raw URL (fallback if no referenceSummary)
+  referenceSummary: string,        // pre-formatted contextString from /api/scrape-url (preferred)
+  workspace_id: string
 }
 ```
 
