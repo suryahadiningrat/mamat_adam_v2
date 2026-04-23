@@ -921,37 +921,6 @@ export default function GeneratePage() {
             </div>
           </div>
 
-          {/* Reference & Context */}
-          <div className="panel fade-up fade-up-4">
-            <div className="panel-header">
-              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <LinkIcon size={14} style={{ color: 'var(--text-secondary)' }} /> Reference & Context <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(optional)</span>
-              </span>
-            </div>
-            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference URL</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="url" value={form.referenceUrl} onChange={e => set('referenceUrl')(e.target.value)}
-                    placeholder="https://…"
-                    style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', outline: 'none', transition: 'border-color 0.15s' }}
-                    onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-                    onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-                  <button className="btn btn-secondary" style={{ padding: '0 12px' }} disabled={!form.referenceUrl}>
-                    <Sparkles size={14} /> Analyze
-                  </button>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Additional Context</label>
-                <textarea value={form.additionalContext} onChange={e => set('additionalContext')(e.target.value)} rows={3} placeholder="E.g. Focus on the launch campaign, mention the free trial offer..." style={{
-                  background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', transition: 'border-color 0.15s', lineHeight: 1.5
-                }} onFocus={e => e.target.style.borderColor = 'var(--border-accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-              </div>
-            </div>
-          </div>
-
           {/* Strategy */}
           {advancedMode && (
             <div className="panel fade-up fade-up-5">
